@@ -1,0 +1,61 @@
+# =========================
+# LunarLink Configuration
+# Example: config.toml
+# =========================
+
+[server]
+# The address the server listens on
+bind_address = "0.0.0.0"
+# The port for HTTP API
+port = 8080
+# Whether to enable HTTPS
+enable_https = false
+# Path to TLS certificate and key (only used if enable_https = true)
+tls_cert_path = ""
+tls_key_path = ""
+
+[auth]
+# Token expiry in minutes
+token_expiry_minutes = 120
+# Allow anonymous read-only access (dangerous for public networks)
+allow_anonymous_read = false
+
+# =========================
+# Default mount points
+# =========================
+[mounts]
+# Whether to automatically include OS default folders
+show_default_mounts = true
+
+# Custom mount points — EntryPoints
+#[[mounts.custom]]
+#name = "Personal Pictures"
+#path = "/home/user/Pictures"
+#permissions = ["read"]
+#
+#[[mounts.custom]]
+#name = "Foo Bar"
+#path = "/data/foo_bar"
+#permissions = ["read", "write"]
+
+# =========================
+# Users
+# =========================
+#[[users]]
+#username = "admin"
+#password_hash = "$argon2id$v=19$m=4096,t=3,p=1$examplehash"  # Example hash
+#permissions = ["read", "write", "delete"]
+#
+#[[users]]
+#username = "john"
+#password_hash = "$argon2id$v=19$m=4096,t=3,p=1$examplehash"
+#permissions = ["read"]
+
+# =========================
+# Experimental Features
+# =========================
+[experimental]
+# Enable execution of binaries via API (DANGEROUS)
+allow_exec = false
+# Future placeholder for experimental transfer modes
+enable_fast_p2p = false

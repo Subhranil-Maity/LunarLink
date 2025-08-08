@@ -1,17 +1,18 @@
 use std::fs;
 use std::os::windows::fs::MetadataExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use tokio::fs::metadata;
-use crate::core::fs::types::{EntryType, LunarMetadata};
 use crate::core::lunar_error::{LunarError, LunarResult};
+use crate::core::to_absolute_path;
+use crate::core::types::{EntryType, LunarMetadata};
 
 pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata>{
     let fs_metadata = metadata(path).await?;
     let is_symlink = fs_metadata.file_type().is_symlink();
 
 
-    let absolute_path = path.to_string_lossy().to_string();
+    let absolute_path = to_absolute_path(path)?.to_string_lossy().to_string();
     let last_modified = fs_metadata
         .modified()?
         .duration_since(UNIX_EPOCH)

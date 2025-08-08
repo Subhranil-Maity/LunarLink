@@ -1,4 +1,4 @@
-use crate::core::fs::types::{EntryType, FileData, FolderData, LunarMetadata};
+use crate::core::types::{EntryType, FileData, FolderData, LunarMetadata};
 use crate::core::lunar_error::{LunarError, LunarResult};
 use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;

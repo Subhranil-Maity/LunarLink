@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 use crate::core::fs::metadata::get_metadata;
-use crate::core::fs::types::LunarMetadata;
+use crate::core::types::LunarMetadata;
 use crate::core::lunar_error::LunarResult;
 
 pub async fn write_file(

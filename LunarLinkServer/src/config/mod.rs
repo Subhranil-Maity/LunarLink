@@ -14,14 +14,15 @@ pub use lunar_users::*;
 
 pub mod read_write;
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct LunarConfig{
-    server: LunarServerConfig,
-    auth: LunarAuth,
-    users: LunarUsersConfig,
-    mounts: LunarMounts,
-    experiments: LunarExperimental
+    pub server: LunarServerConfig,
+    pub auth: LunarAuth,
+    pub users: LunarUsersConfig,
+    pub mounts: LunarMounts,
+    pub experiments: LunarExperimental
 }
+
 
 
 

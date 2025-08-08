@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use crate::core::fs::types::LunarMetadata;
 use crate::core::lunar_error::LunarResult;
+use crate::core::types::LunarMetadata;
 
 pub async fn touch(path: &PathBuf) -> LunarResult<LunarMetadata>{
     // Create the file if it doesn't exist, or update its last modified time

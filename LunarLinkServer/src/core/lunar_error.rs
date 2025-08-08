@@ -29,6 +29,9 @@ pub enum LunarError {
     Unexpected,                // Truly unknown/unhandled
 
     Custom { code: u16, message: String }, // Flexible one-off
+    MissingAuthHeader,
+    InvalidAuthHeader,
+    JwtError(String),
 }
 
 

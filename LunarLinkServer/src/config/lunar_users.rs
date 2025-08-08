@@ -1,20 +1,21 @@
 use std::fs::Permissions;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct LunarUsersConfig {
     pub users: Vec<LunarUser>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+pub type UserPermissions = Vec<UserPermission>;
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct LunarUser {
     pub username: String,
     pub password: String,
-    pub permissions: Vec<UserPermissions>,
+    pub permissions: UserPermissions,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub enum UserPermissions {
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub enum UserPermission {
     Read,
     Write,
     Delete,

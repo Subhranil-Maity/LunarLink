@@ -1,17 +1,17 @@
-pub mod types;
-
+// This file is part of the `core` module, which provides filesystem operations.
+// It includes submodules for reading, creating, writing, copying/moving,
 mod read;
 pub use read::*;
-mod create;
+pub mod create;
 pub use create::*;
 mod write;
 pub use write::*;
-mod copy_move;
+pub mod copy_move;
 pub use copy_move::*;
 mod delete;
 pub use delete::*;
 
 
 
-mod metadata;
+pub mod metadata;
 pub use metadata::*;

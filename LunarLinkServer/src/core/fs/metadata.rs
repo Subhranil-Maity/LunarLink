@@ -7,6 +7,35 @@ use crate::core::lunar_error::{LunarError, LunarResult};
 use crate::core::to_absolute_path;
 use crate::core::types::{EntryType, LunarMetadata};
 
+/// Asynchronously retrieves metadata for the file or folder at the specified path.
+///
+/// # Arguments
+///
+/// * [`path`] - A reference to a [`PathBuf`] representing the file or folder to get metadata for.
+///
+/// # Returns
+///
+/// Returns a [`LunarResult<LunarMetadata>`] containing the metadata information.
+///
+/// # Errors
+///
+/// This function may return an error if:
+/// - The file or folder does not exist.
+/// - Retrieving metadata fails due to permissions or other I/O errors.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use std::path::PathBuf;
+/// use lunar_lib::core::fs::metadata::get_metadata;
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let path = PathBuf::from("example.txt");
+/// let metadata = get_metadata(&path).await?;
+/// println!("File size: {}", metadata.size);
+/// # Ok(())
+/// # }
+/// ```
+
 pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata>{
     let fs_metadata = metadata(path).await?;
     let is_symlink = fs_metadata.file_type().is_symlink();

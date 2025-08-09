@@ -36,9 +36,14 @@ use std::path::PathBuf;
 /// ```
 
 pub async fn read_file(path: &PathBuf) -> LunarResult<FileData>{
-    let data = tokio::fs::read(path).await?;
+    let data = read_file_bytes(path).await?;
     let metadata = get_metadata(path).await?;
     Ok(FileData{metadata, data})
+}
+
+pub async fn read_file_bytes(path: &PathBuf) -> LunarResult<Vec<u8>> {
+    let data = tokio::fs::read(path).await?;
+    Ok(data)
 }
 
 

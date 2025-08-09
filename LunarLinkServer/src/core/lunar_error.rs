@@ -32,6 +32,8 @@ pub enum LunarError {
     MissingAuthHeader,
     InvalidAuthHeader,
     JwtError(String),
+    PathNotProvided,
+    NewPathNotProvided,
 }
 
 

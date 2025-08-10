@@ -5,12 +5,12 @@ import kotlinx.serialization.Serializable
 
 
 @Serializable
-data class FolderContent(
+data class FolderContentDto(
     val metadata: MetaDataDto,
     val entries: List<MetaDataDto>
 )
 
-fun FolderContent.map(): FolderInfo{
+fun FolderContentDto.map(): FolderInfo{
     return FolderInfo(
         metaData = this.metadata.map(),
         entries = this.entries.map { it.map() }

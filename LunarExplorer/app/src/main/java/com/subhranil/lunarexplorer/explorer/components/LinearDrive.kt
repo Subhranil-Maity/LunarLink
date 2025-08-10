@@ -33,7 +33,7 @@ fun LinearDrive(
     Row(
         modifier = modifier
 //            .padding(8.dp, 2.dp)
-//            .fillMaxWidth()
+            .fillMaxWidth()
             .clickable {
                 onClick()
             }.height(60.dp),
@@ -54,7 +54,7 @@ fun LinearDrive(
                     (drive.usedSize.toDouble() / drive.totalSize.toDouble()).coerceIn(0.0, 1.0)
                         .toFloat()
                 },
-//                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
             )
         }
 

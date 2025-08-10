@@ -1,5 +1,7 @@
 package com.subhranil.lunarexplorer.repository
 
+import com.subhranil.lunarexplorer.models.FolderInfo
+import com.subhranil.lunarexplorer.models.LunarMetaData
 import com.subhranil.lunarexplorer.models.Mounts
 import com.subhranil.lunarexplorer.result.FileSystemErrors
 import com.subhranil.lunarexplorer.result.FileSystemResult
@@ -9,6 +11,9 @@ import com.subhranil.lunarexplorer.result.LunarResult
 interface FileSystemRepository {
     suspend fun connect(): FileSystemResult<Unit>
     suspend fun getMounts(): FileSystemResult<Mounts>
+
+    suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData>
+    suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo>
 
 //    // ======== Navigation ========
 //    fun listFiles(path: String): List<FileItem>

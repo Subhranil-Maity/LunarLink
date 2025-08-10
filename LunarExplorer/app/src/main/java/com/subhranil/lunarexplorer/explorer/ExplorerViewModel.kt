@@ -7,6 +7,7 @@ import com.subhranil.lunarexplorer.models.Mounts
 import com.subhranil.lunarexplorer.repository.FileSystemRepository
 import com.subhranil.lunarexplorer.result.FileSystemErrors
 import com.subhranil.lunarexplorer.result.LunarResult
+import com.subhranil.lunarexplorer.result.RootError
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,10 +91,40 @@ class ExplorerViewModel: ViewModel() {
                 pathHistory = list
             )
         }
+        onRefresh()
     }
 
-    private fun onRefresh() {
+    fun onRefresh() {
+        // TODO: Add full pathhistory and its content in state to avoid refetching
+        if (_state.value.pathHistory.isEmpty()){
+            return
+        }
+        viewModelScope.launch {
+            withRefreshing {
+                withHandledError(fs.getFolderContent(_state.value.pathHistory.last())){ content ->
+                    _state.update {
+                        it.copy(
+                            currentFolderContent = content.entries
+                        )
+                    }
+                }
+            }
+        }
 
+    }
+    private inline fun <D, E : RootError> withHandledError(
+        result: LunarResult<D, E>,
+        block: (data: D) -> Unit
+    ) {
+        if (result.isError()) {
+            _state.update {
+                it.copy(
+                    error = result.getErrorOrNull().toString()
+                )
+            }
+        } else {
+            block(result.successOrNull()!!)
+        }
     }
 
     private inline fun withRefreshing(block: () -> Unit) {

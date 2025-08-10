@@ -5,26 +5,25 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.DrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.subhranil.lunarexplorer.explorer.adaptative.small.LargeScreenExplorer
 import com.subhranil.lunarexplorer.explorer.adaptative.small.SmallScreenExplorer
 import kotlinx.coroutines.launch
 
 
 data class AdaptativeAppBarState(
-    val title: @Composable () -> Unit
+    val title: @Composable () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class, ExperimentalMaterial3Api::class)
@@ -33,7 +32,7 @@ fun AdaptativeExplorer(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     drawerState: DrawerState,
-//    appBar: @Composable () -> Unit,
+    otherBackgroundColor: Color,
     adaptativeAppBarState: AdaptativeAppBarState,
     listPane: @Composable () -> Unit,
     detailPlane: @Composable () -> Unit
@@ -63,7 +62,8 @@ fun AdaptativeExplorer(
                             ) {
                                 Icon(Icons.Default.Menu, contentDescription = "Menu")
                             }
-                        }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = otherBackgroundColor)
                     )
                 },
                 listPane = listPane,
@@ -87,11 +87,13 @@ fun AdaptativeExplorer(
                         },
                         navigationIcon = {
 
-                        }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = otherBackgroundColor)
                     )
                 },
                 listPane = listPane,
-                detailPlane = detailPlane
+                detailPlane = detailPlane,
+                otherBackgroundColor = otherBackgroundColor
             )
         }
     }

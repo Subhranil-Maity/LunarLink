@@ -19,6 +19,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -42,6 +43,7 @@ import com.subhranil.lunarexplorer.explorer.adaptative.AdaptativeExplorer
 import com.subhranil.lunarexplorer.explorer.components.LinearEntry
 import com.subhranil.lunarexplorer.explorer.sidebar.AdaptiveListDetailScaffold
 import com.subhranil.lunarexplorer.explorer.sidebar.ExplorerSideBar
+import com.subhranil.lunarexplorer.models.EntryType
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -74,13 +76,14 @@ fun ExplorerScreen(
         drawerState = drawerState,
         adaptativeAppBarState = AdaptativeAppBarState(
             title = {
-                if (state.pathHistory.isEmpty()){
+                if (state.pathHistory.isEmpty()) {
                     Text("Select A Path")
-                }else{
+                } else {
                     Text(state.pathHistory.last())
                 }
             }
         ),
+        otherBackgroundColor = MaterialTheme.colorScheme.surfaceContainer,
         listPane = {
             ExplorerSideBar(mounts = state.mounts) {
                 scope.launch {
@@ -109,7 +112,9 @@ fun ExplorerScreen(
 //                    }
                         state.currentFolderContent.forEach {
                             LinearEntry(metaData = it) {
-                                onAction(ExplorerActions.GoToPath(it.absolutePath))
+                                if (it.entryType == EntryType.DIRECTORY) {
+                                    onAction(ExplorerActions.GoToPath(it.absolutePath))
+                                }
                             }
                         }
                     }

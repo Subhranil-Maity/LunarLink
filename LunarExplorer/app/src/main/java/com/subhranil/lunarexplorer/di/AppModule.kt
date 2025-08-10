@@ -1,8 +1,17 @@
 package com.subhranil.lunarexplorer.di
 
+import com.subhranil.lunarexplorer.explorer.ExplorerViewModel
+import com.subhranil.lunarexplorer.lunarlink.provideHttpClient
 import com.subhranil.lunarexplorer.settings.AppSettings
+import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
 var singletons = module {
     single { AppSettings() }
+    single { provideHttpClient() }
+}
+
+
+var viewModels = module {
+    viewModelOf(::ExplorerViewModel)
 }

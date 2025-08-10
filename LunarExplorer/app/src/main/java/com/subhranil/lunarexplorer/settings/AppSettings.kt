@@ -21,7 +21,7 @@ data class AppSettings (
     var dummySettingSettings: DummySettingSettings = DummySettingSettings()
 ){
     init {
-        var context = get().get<Context>()
-        Toast.makeText(context, "Setting Defaults Initialised", Toast.LENGTH_SHORT).show()
+//        var context = get().get<Context>()
+//        Toast.makeText(context, "Setting Defaults Initialised", Toast.LENGTH_SHORT).show()
     }
 }

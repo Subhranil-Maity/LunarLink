@@ -23,7 +23,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingListPage(
     modifier: Modifier = Modifier,
-    onItemClick: (SettingObject.SettingGroup) -> Unit
+    appSettings: AppSettings,
+    onItemClick: (SettingGroup) -> Unit
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -41,35 +42,49 @@ fun SettingListPage(
                 color = MaterialTheme.colorScheme.onSurface
             )
         )
-        AppSettings.ForEachSetting { setting ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onItemClick(setting) }
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-
-                    Text(
-                        text = setting.name,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                    Text(
-                        text = setting.description,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
+        SettingRootListItems(
+            setting = appSettings.appearanceSettings
+        ) { settingGroup ->
+            onItemClick(settingGroup)
         }
+        SettingRootListItems(
+            setting = appSettings.dummySettingSettings
+        ) { settingGroup ->
+            onItemClick(settingGroup)
+        }
+    }
+}
 
+@Composable
+fun SettingRootListItems(
+    setting: SettingGroup,
+    onItemClick: (SettingGroup) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onItemClick(setting) }
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+
+            Text(
+                text = setting.name,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    color = MaterialTheme.colorScheme.primary
+                )
+            )
+            Text(
+                text = setting.description,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+        }
     }
 }

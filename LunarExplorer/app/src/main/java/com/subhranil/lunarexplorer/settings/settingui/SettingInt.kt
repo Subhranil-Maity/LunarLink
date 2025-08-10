@@ -1,5 +1,6 @@
 package com.subhranil.lunarexplorer.settings.settingui
 
+import android.util.Log
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -65,7 +66,7 @@ fun SettingIntSlider(
             onValueChange = {
                 onValueChange(it.toInt())
             },
-            steps = 1,
+            steps = range.sum(),
             valueRange = range.first.toFloat()..range.last.toFloat(),
         )
     }

@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 fun SmallScreenExplorer(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
-    appBar: @Composable (DrawerState) -> Unit,
+    appBar: @Composable () -> Unit,
     listPane: @Composable () -> Unit,
     detailPlane: @Composable () -> Unit,
     drawerState: DrawerState
@@ -57,7 +57,7 @@ fun SmallScreenExplorer(
         content = {
             Scaffold(
                 topBar = {
-                    appBar(drawerState)
+                    appBar()
                 }
             ) { padding ->
                 Box(

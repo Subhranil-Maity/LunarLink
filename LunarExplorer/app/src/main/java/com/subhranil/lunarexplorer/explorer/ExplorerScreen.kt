@@ -1,12 +1,15 @@
 package com.subhranil.lunarexplorer.explorer
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,8 +34,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.subhranil.lunarexplorer.explorer.adaptative.AdaptativeAppBarState
 import com.subhranil.lunarexplorer.explorer.adaptative.AdaptativeExplorer
 import com.subhranil.lunarexplorer.explorer.components.LinearEntry
 import com.subhranil.lunarexplorer.explorer.sidebar.AdaptiveListDetailScaffold
@@ -67,18 +72,15 @@ fun ExplorerScreen(
         modifier = modifier,
         isSelected = !state.pathHistory.isEmpty(),
         drawerState = drawerState,
-        appBar = { drawerState ->
-            TopAppBar(
-                title = { Text("Dummy Title") },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        scope.launch { drawerState.open() }
-                    }) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
-                    }
+        adaptativeAppBarState = AdaptativeAppBarState(
+            title = {
+                if (state.pathHistory.isEmpty()){
+                    Text("Select A Path")
+                }else{
+                    Text(state.pathHistory.last())
                 }
-            )
-        },
+            }
+        ),
         listPane = {
             ExplorerSideBar(mounts = state.mounts) {
                 scope.launch {

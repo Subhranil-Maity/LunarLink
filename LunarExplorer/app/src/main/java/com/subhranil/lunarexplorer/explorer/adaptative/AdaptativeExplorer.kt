@@ -17,7 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.subhranil.lunarexplorer.explorer.adaptative.small.LargeScreenExplorer
+import com.subhranil.lunarexplorer.explorer.adaptative.large.LargeScreenExplorer
 import com.subhranil.lunarexplorer.explorer.adaptative.small.SmallScreenExplorer
 import kotlinx.coroutines.launch
 

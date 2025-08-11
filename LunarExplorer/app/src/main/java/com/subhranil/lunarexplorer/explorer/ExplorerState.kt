@@ -10,5 +10,6 @@ data class ExplorerState(
     val error: String? = null,
     val mounts: Mounts = defaultMounts(),
     val pathHistory: List<String> = emptyList(),
-    val currentFolderContent: List<LunarMetaData> = emptyList()
+    val currentFolderContent: List<LunarMetaData> = emptyList(),
+    val currentFolderInfo: LunarMetaData? = null
 )

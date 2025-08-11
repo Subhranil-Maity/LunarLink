@@ -5,88 +5,125 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.subhranil.lunarexplorer.icons.getIcon
+import com.subhranil.lunarexplorer.models.EntryType
 import com.subhranil.lunarexplorer.models.LunarMetaData
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlin.time.toJavaInstant
 
+@OptIn(ExperimentalTime::class)
 @Composable
 fun LinearEntry(
     modifier: Modifier = Modifier,
     metaData: LunarMetaData,
     onClick: () -> Unit = {}
 ) {
+    val (icon, color) = getIcon(metaData)
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .height(50.dp)
-            .padding(8.dp, 0.dp)
-            .clickable {
-                onClick()
-            },
-        horizontalArrangement = Arrangement.SpaceBetween
+            .height(IntrinsicSize.Min)
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        val (icon, color) = getIcon(metaData)
+        // Icon
         Icon(
-            modifier = Modifier.height(60.dp),
             imageVector = icon,
             contentDescription = null,
-            tint = color
+            tint = color,
+            modifier = Modifier
+                .size(40.dp)
+                .padding(end = 12.dp)
         )
+
+        // Name + Size
         Column(
-            modifier = Modifier.fillMaxWidth(0.8f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            Text(text = metaData.name, style = MaterialTheme.typography.titleMedium)
             Text(
-                text = bytesToHumanReadable(metaData.size),
-                style = MaterialTheme.typography.bodyMedium
+                text = metaData.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (metaData.entryType != EntryType.DIRECTORY) {
+                Text(
+                    text = bytesToHumanReadable(metaData.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Last modified (right-aligned)
+        val (date, time) = formatInstant(metaData.lastModified)
+
+        Column(
+            modifier = Modifier,
+            horizontalAlignment = Alignment.End
+        ) {
+            Text(
+                text = date,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = time,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Box(
-            modifier = Modifier.fillMaxWidth(0.2f)
-        ) {
-        }
+
     }
 }
 
 
-//@Preview()
-//@Composable
-//private fun LinearEntryPreview() {
-//    val entries = listOf(
-//        FsEntry(
-//            name = "name.extension",
-//            size = 21299,
-//            entryType = EntryType.FILE,
-//            symlinkLocation = null,
-//            absolutePath = "d://some/some/name.extension"
-//        ), FsEntry(
-//            name = "Folder",
-//            size = 0,
-//            entryType = EntryType.DIRECTORY,
-//            symlinkLocation = null,
-//            absolutePath = "d://some/some/Folder"
-//        )
-//    )
-//    Column {
-//        for (entry in entries){
-//            LinearEntry(metaData = entry)
-//            HorizontalDivider(thickness = 1.dp)
-//        }
-//    }
-//}
+
+@OptIn(ExperimentalTime::class)
+@Composable
+fun formatInstant(instant: Instant): Pair<String, String> {
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            .withZone(ZoneId.systemDefault())
+    }
+    val timeFormatter = remember {
+        DateTimeFormatter.ofPattern("HH:mm")
+            .withZone(ZoneId.systemDefault())
+    }
+
+    val javaInstant = instant.toJavaInstant()
+    val dateStr = dateFormatter.format(javaInstant)
+    val timeStr = timeFormatter.format(javaInstant)
+
+    return dateStr to timeStr
+}
+
 
 fun bytesToHumanReadable(bytes: Long): String {
     val units = arrayOf("B", "KB", "MB", "GB", "TB")

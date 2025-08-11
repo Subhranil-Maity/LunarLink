@@ -21,7 +21,7 @@ class ExplorerViewModel: ViewModel() {
     val state = _state.asStateFlow()
     val fs: FileSystemRepository = LunarServerRepo(
         client = get().get<HttpClient>(),
-        baseUrl = "http://192.168.251.178:8080",
+        baseUrl = "http://192.168.54.178:8080",
         userName = "power",
         pass = "power",
     )
@@ -75,6 +75,20 @@ class ExplorerViewModel: ViewModel() {
         when (action) {
             ExplorerActions.Refresh -> onRefresh()
             is ExplorerActions.GoToPath -> onGoToPath(action.path)
+            ExplorerActions.OnBackPressed -> onBackPressed()
+        }
+    }
+
+    private fun onBackPressed() {
+        if (!_state.value.pathHistory.isEmpty()){
+            val list = _state.value.pathHistory.toMutableList()
+            list.removeAt(list.lastIndex)
+            _state.update {
+                it.copy(
+                    pathHistory = list
+                )
+            }
+            onRefresh()
         }
     }
 
@@ -95,16 +109,17 @@ class ExplorerViewModel: ViewModel() {
     }
 
     fun onRefresh() {
-        // TODO: Add full pathhistory and its content in state to avoid refetching
+        // TODO: Add full path history and its content in state to avoid refetching
         if (_state.value.pathHistory.isEmpty()){
             return
         }
         viewModelScope.launch {
             withRefreshing {
                 withHandledError(fs.getFolderContent(_state.value.pathHistory.last())){ content ->
-                    _state.update {
+                    _state.update { it ->
                         it.copy(
-                            currentFolderContent = content.entries
+                            currentFolderContent = content.entries.sortedBy {ent -> ent.entryType },
+                            currentFolderInfo = content.metaData
                         )
                     }
                 }
@@ -137,6 +152,13 @@ class ExplorerViewModel: ViewModel() {
         _state.update {
             it.copy(
                 isLoading = false
+            )
+        }
+    }
+    fun consumeError(){
+        _state.update {
+            it.copy(
+                error = null
             )
         }
     }

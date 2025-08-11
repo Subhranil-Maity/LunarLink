@@ -2,5 +2,6 @@ package com.subhranil.lunarexplorer.explorer
 
 sealed class ExplorerActions {
     data object Refresh : ExplorerActions()
+    data object OnBackPressed : ExplorerActions()
     data class GoToPath(val path: String): ExplorerActions()
 }

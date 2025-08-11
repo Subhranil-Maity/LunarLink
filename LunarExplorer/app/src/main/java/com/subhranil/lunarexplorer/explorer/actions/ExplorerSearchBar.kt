@@ -26,13 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.subhranil.lunarexplorer.explorer.ExplorerActions
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExplorerSearchBar(
     searchText: String,
     onSearchTextChange: (String) -> Unit,
     onSearchSubmit: () -> Unit,
-    onClose: () -> Unit
 ) {
     OutlinedTextField(
         value = searchText,
@@ -41,29 +39,19 @@ fun ExplorerSearchBar(
         placeholder = { Text("Search...") },
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp) // Gmail-style height
-            .clip(RoundedCornerShape(24.dp)), // pill shape
+            .height(48.dp)
+            .clip(RoundedCornerShape(24.dp)),
         shape = RoundedCornerShape(24.dp),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent
+            unfocusedIndicatorColor = Color.Transparent
         ),
         trailingIcon = {
-            IconButton(onClick = {
-                onSearchSubmit()
-            }) {
+            IconButton(onClick = onSearchSubmit) {
                 Icon(Icons.Default.Search, contentDescription = "Search")
             }
         },
-        leadingIcon = {
-            IconButton(onClick = {
-                onClose()
-            }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-        }
     )
 }

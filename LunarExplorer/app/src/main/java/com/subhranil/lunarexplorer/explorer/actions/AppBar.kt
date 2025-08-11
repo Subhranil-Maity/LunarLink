@@ -2,12 +2,25 @@ package com.subhranil.lunarexplorer.explorer.actions
 
 
 import android.annotation.SuppressLint
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.with
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -31,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
@@ -39,70 +53,110 @@ import com.subhranil.lunarexplorer.explorer.ExplorerActions
 import com.subhranil.lunarexplorer.explorer.ExplorerState
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun ExplorerTopAppBar(
     state: ExplorerState,
     onAction: (ExplorerActions) -> Unit,
     onDrawerButtonClicked: () -> Unit,
-    shouldShowDrawer: Boolean,
-
-    ) {
-
-    val context = LocalContext.current
+    shouldShowDrawer: Boolean
+) {
     val actions = getActionButtons()
     var searchText by remember { mutableStateOf("") }
+
     BoxWithConstraints {
         val maxActionsInBar = if (maxWidth > 400.dp) 3 else 1
         val inlineActions = actions.take(maxActionsInBar)
         val overflowActions = actions.drop(maxActionsInBar)
+        val rotation by animateFloatAsState(
+            targetValue = when {
+                state.showSearch -> 0f // Search mode → back arrow
+                !shouldShowDrawer -> 0f // Always back arrow when drawer is disabled
+                else -> 180f // Drawer → menu
+            },
+            animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
+            label = "NavIconRotation"
+        )
+
         TopAppBar(
-            modifier = Modifier,
+            modifier = Modifier.animateContentSize(),
+            navigationIcon = {
+                IconButton(
+                    onClick = {
+                        when {
+                            state.showSearch -> {
+                                onAction(ExplorerActions.OnSearchDisMissed)
+                            }
+                            shouldShowDrawer -> {
+                                onDrawerButtonClicked()
+                            }
+                            else -> {
+                                onAction(ExplorerActions.OnBackPressed)
+                            }
+                        }
+                    },
+                    modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                ) {
+                    Crossfade(
+                        targetState = when {
+                            state.showSearch -> Icons.AutoMirrored.Filled.ArrowBack
+                            shouldShowDrawer -> Icons.Default.Menu
+                            else -> Icons.AutoMirrored.Filled.ArrowBack
+                        },
+                        label = "NavIconCrossfade"
+                    ) { icon ->
+                        Icon(icon, contentDescription = "Navigation")
+                    }
+                }
+            }
+            ,
+            title = {
+                AnimatedContent(
+                    targetState = state.showSearch,
+                    transitionSpec = {
+                        slideInHorizontally { it } + fadeIn() with
+                                slideOutHorizontally { -it } + fadeOut()
+                    }
+                ) { isSearching ->
+                    if (isSearching) {
+                        ExplorerSearchBar(
+                            searchText = searchText,
+                            onSearchTextChange = {
+                                searchText = it
+                                onAction(ExplorerActions.OnSearchTextChange(it))
+                            },
+                            onSearchSubmit = {
+                                onAction(ExplorerActions.OnSearchTextChange(searchText))
+                            },
+//                            onClose = {
+//                                onAction(ExplorerActions.OnSearchDisMissed)
+//                            }
+                        )
+                    } else {
+                        ThisTitle(state = state)
+                    }
+                }
+            },
             actions = {
-                if (!state.showSearch){
+                if (!state.showSearch) {
+                    // Show normal actions including search icon
                     Actions(
                         inlineActions = inlineActions,
                         overflowActions = overflowActions,
                         onAction = onAction
                     )
+//                    IconButton(onClick = { onAction(ExplorerActions.OnSearchStarted) }) {
+//                        Icon(Icons.Default.Search, contentDescription = "Search")
+//                    }
                 }
             },
-            title = {
-                if (state.showSearch){
-                    ExplorerSearchBar(
-                        searchText = searchText,
-                        onSearchTextChange = {
-                            searchText = it
-                            onAction(ExplorerActions.OnSearchTextChange(it))
-                        },
-                        onSearchSubmit = {
-                            onAction(ExplorerActions.OnSearchTextChange(searchText))
-                        },
-                        onClose = {
-                            onAction(ExplorerActions.OnSearchDisMissed)
-                        }
-                    )
-                }else{
-                    ThisTitle(
-                        state = state
-                    )
-                }
-            },
-            navigationIcon = {
-                if (shouldShowDrawer && !state.showSearch) {
-                    IconButton(
-                        onClick = {
-                            onDrawerButtonClicked()
-                        },
-                    ) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
-                    }
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            )
         )
     }
 }
+
 
 @Composable
 private fun ThisTitle(

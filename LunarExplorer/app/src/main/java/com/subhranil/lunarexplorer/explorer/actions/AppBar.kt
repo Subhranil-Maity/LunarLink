@@ -228,6 +228,9 @@ private fun Actions(
             overflowActions.forEach { action ->
                 if (action.subActions.isEmpty()) {
                     DropdownMenuItem(
+                        leadingIcon = {
+                            Icon(action.icon, contentDescription = action.label)
+                        },
                         text = { Text(action.label) },
                         onClick = {
                             showMenu = false
@@ -241,6 +244,9 @@ private fun Actions(
                     )
                 } else {
                     DropdownMenuItem(
+                        leadingIcon = {
+                            Icon(action.icon, contentDescription = action.label)
+                        },
                         text = { Text("${action.label} ➤") },
                         onClick = {
                             submenuFor = action
@@ -269,6 +275,9 @@ private fun Actions(
         ) {
             submenuFor!!.subActions.forEach { subAction ->
                 DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(subAction.icon, contentDescription = subAction.label)
+                    },
                     text = { Text(subAction.label) },
                     onClick = {
                         submenuFor = null

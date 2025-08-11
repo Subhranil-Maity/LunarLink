@@ -11,8 +11,10 @@ data class ExplorerState(
     val mounts: Mounts = defaultMounts(),
     val pathHistory: List<String> = emptyList(),
     val currentFolderContent: List<LunarMetaData> = emptyList(),
-    val currentFolderInfo: LunarMetaData? = null
+    val currentFolderInfo: LunarMetaData? = null,
+    val askForString: String? = null
 )
+
 
 enum class AppBarActionEnum{
     SEARCH,
@@ -20,3 +22,13 @@ enum class AppBarActionEnum{
     CREATE_FILE,
     CREATE_FOLDER
 }
+enum class NameRequestType {
+    FILE,
+    FOLDER
+}
+
+data class PendingNameRequest(
+    val type: NameRequestType,
+    val basePath: String,
+    val onConfirm: (String) -> Unit
+)

@@ -14,6 +14,8 @@ interface FileSystemRepository {
 
     suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData>
     suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo>
+    suspend fun createFile(path: String): FileSystemResult<LunarMetaData>
+    suspend fun createFolder(path: String): FileSystemResult<LunarMetaData>
 
 //    // ======== Navigation ========
 //    fun listFiles(path: String): List<FileItem>

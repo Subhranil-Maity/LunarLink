@@ -171,5 +171,65 @@ class LunarServerRepo(
             return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
         }
     }
+
+    override suspend fun createFile(path: String): FileSystemResult<LunarMetaData> {
+        try {
+            val response = client.request("$baseUrl/api/v1/fs/touch") {
+                method = HttpMethod.Post
+                bearerAuth(token = token)
+                parameter("path", path)
+            }
+            when (response.status.value) {
+                HttpStatusCode.OK.value -> {
+                    val responseData = Json.decodeFromString<MetaDataDto>(response.body())
+                    return LunarResult.Success(responseData.map())
+                }
+                HttpStatusCode.Unauthorized.value -> {
+                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
+                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
+                }
+                else -> {
+                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
+                    Log.d("RemoteServerRepo", errorResponse.message)
+                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                }
+            }
+        }
+        catch (e: Exception) {
+            Log.d("RemoteServerRepo", e.message.toString())
+            currentCoroutineContext().ensureActive()
+            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        }
+    }
+
+    override suspend fun createFolder(path: String): FileSystemResult<LunarMetaData> {
+        try {
+            val response = client.request("$baseUrl/api/v1/fs/mkdir") {
+                method = HttpMethod.Post
+                bearerAuth(token = token)
+                parameter("path", path)
+            }
+            when (response.status.value) {
+                HttpStatusCode.OK.value -> {
+                    val responseData = Json.decodeFromString<MetaDataDto>(response.body())
+                    return LunarResult.Success(responseData.map())
+                }
+                HttpStatusCode.Unauthorized.value -> {
+                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
+                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
+                }
+                else -> {
+                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
+                    Log.d("RemoteServerRepo", errorResponse.message)
+                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                }
+            }
+        }
+        catch (e: Exception) {
+            Log.d("RemoteServerRepo", e.message.toString())
+            currentCoroutineContext().ensureActive()
+            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        }
+    }
 }
 

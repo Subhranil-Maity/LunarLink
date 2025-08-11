@@ -79,8 +79,15 @@ fun ExplorerScreen(
         }
         return
     }
-    BackHandler(enabled = !state.pathHistory.isEmpty()) {
-        onAction(ExplorerActions.OnBackPressed)
+
+    if (state.showSearch) {
+        BackHandler(enabled = true) {
+            onAction(ExplorerActions.OnSearchDisMissed)
+        }
+    }else if (!state.pathHistory.isEmpty()){
+        BackHandler(enabled = true) {
+            onAction(ExplorerActions.OnBackPressed)
+        }
     }
     HandleRequest(
         viewModel.pendingNameRequest,

@@ -85,8 +85,34 @@ class ExplorerViewModel : ViewModel() {
             is ExplorerActions.GoToPath -> onGoToPath(action.path)
             ExplorerActions.OnBackPressed -> onBackPressed()
             is ExplorerActions.OnActionButtonPressed -> onActionButtonPressed(action.actionType)
+            is ExplorerActions.OnSearchTextChange -> onSearchTextChange(action.search)
+            ExplorerActions.OnSearchDisMissed -> onSearchDismissed()
         }
     }
+
+    private fun onSearchDismissed() {
+        _state.update {
+            it.copy(
+                showSearch = false,
+                filteredFolderContent = emptyList()
+            )
+        }
+    }
+
+    private fun onSearchTextChange(search: String) {
+        _state.update {
+            it.copy(
+                filteredFolderContent = if (search.isBlank()) {
+                    it.currentFolderContent
+                } else {
+                    it.currentFolderContent.filter { data ->
+                        data.name.contains(search, ignoreCase = true)
+                    }
+                }
+            )
+        }
+    }
+
 
     private fun onActionButtonPressed(actionType: AppBarActionEnum) {
         when (actionType) {
@@ -98,6 +124,13 @@ class ExplorerViewModel : ViewModel() {
             AppBarActionEnum.CREATE_FOLDER -> {
                 val path = _state.value.pathHistory.lastOrNull() ?: return
                 requestNameForFolder(path)
+            }
+            AppBarActionEnum.SEARCH -> {
+                _state.update {
+                    it.copy(
+                        showSearch = true
+                    )
+                }
             }
 
             else -> {}
@@ -180,6 +213,7 @@ class ExplorerViewModel : ViewModel() {
     }
 
     private fun onGoToPath(path: String) {
+        onSearchDismissed()
         if (!_state.value.pathHistory.isEmpty()) {
             if (_state.value.pathHistory.last() == path) {
                 return

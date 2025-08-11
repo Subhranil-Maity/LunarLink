@@ -2,6 +2,7 @@ package com.subhranil.lunarexplorer.explorer.actions
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -19,6 +20,11 @@ data class AppBarAction(
 
 @Composable
 fun getActionButtons(modifier: Modifier = Modifier): List<AppBarAction>{
+    val searchAction = AppBarAction(
+        label = "Search",
+        icon = Icons.Default.Search,
+        type = AppBarActionEnum.SEARCH
+    )
     val settingAction = AppBarAction(
         label = "Setting",
         icon = Icons.Default.Settings,
@@ -46,6 +52,7 @@ fun getActionButtons(modifier: Modifier = Modifier): List<AppBarAction>{
     )
 
     return listOf(
+        searchAction,
         settingAction,
         create
     )

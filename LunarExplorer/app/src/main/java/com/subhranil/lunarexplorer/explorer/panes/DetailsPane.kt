@@ -52,7 +52,11 @@ fun DetailsPane(
                 state = lazyState,
             ) {
                 items(
-                    items = state.currentFolderContent,
+                    items = if (state.showSearch){
+                        state.filteredFolderContent
+                    }else{
+                        state.currentFolderContent
+                    },
                     key = { it.absolutePath }
                 ) {
                     LinearEntry(metaData = it) {

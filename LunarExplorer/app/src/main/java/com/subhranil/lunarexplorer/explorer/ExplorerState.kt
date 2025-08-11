@@ -12,7 +12,8 @@ data class ExplorerState(
     val pathHistory: List<String> = emptyList(),
     val currentFolderContent: List<LunarMetaData> = emptyList(),
     val currentFolderInfo: LunarMetaData? = null,
-    val askForString: String? = null
+    val filteredFolderContent: List<LunarMetaData> = emptyList(),
+    val showSearch: Boolean = false
 )
 
 

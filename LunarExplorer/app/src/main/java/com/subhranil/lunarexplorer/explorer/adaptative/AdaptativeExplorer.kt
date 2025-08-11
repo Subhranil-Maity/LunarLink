@@ -22,9 +22,9 @@ import com.subhranil.lunarexplorer.explorer.adaptative.small.SmallScreenExplorer
 import kotlinx.coroutines.launch
 
 
-data class AdaptativeAppBarState(
-    val title: @Composable () -> Unit,
-)
+//data class AdaptativeAppBarState(
+//    val title: @Composable () -> Unit,
+//)
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -32,8 +32,7 @@ fun AdaptativeExplorer(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     drawerState: DrawerState,
-    otherBackgroundColor: Color,
-    adaptativeAppBarState: AdaptativeAppBarState,
+    topAppBar: @Composable (Boolean) -> Unit,
     listPane: @Composable () -> Unit,
     detailPlane: @Composable () -> Unit
 ) {
@@ -46,25 +45,7 @@ fun AdaptativeExplorer(
                 modifier = modifier,
                 isSelected = isSelected,
                 appBar = {
-                    TopAppBar(
-                        modifier = Modifier
-//                    .border(2.dp, androidx.compose.ui.graphics.Color.Cyan)
-                        ,
-
-                        title = {
-                            adaptativeAppBarState.title()
-                        },
-                        navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    scope.launch { drawerState.open() }
-                                },
-                            ) {
-                                Icon(Icons.Default.Menu, contentDescription = "Menu")
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = otherBackgroundColor)
-                    )
+                    topAppBar(true)
                 },
                 listPane = listPane,
                 detailPlane = detailPlane,
@@ -77,23 +58,10 @@ fun AdaptativeExplorer(
             LargeScreenExplorer(
                 modifier = modifier,
                 appBar = {
-                    TopAppBar(
-                        modifier = Modifier
-//                    .border(2.dp, androidx.compose.ui.graphics.Color.Cyan)
-                        ,
-
-                        title = {
-                            adaptativeAppBarState.title()
-                        },
-                        navigationIcon = {
-
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = otherBackgroundColor)
-                    )
+                    topAppBar(false)
                 },
                 listPane = listPane,
-                detailPlane = detailPlane,
-                otherBackgroundColor = otherBackgroundColor
+                detailPlane = detailPlane
             )
         }
     }

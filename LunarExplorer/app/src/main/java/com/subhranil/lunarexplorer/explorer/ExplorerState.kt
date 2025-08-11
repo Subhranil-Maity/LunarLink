@@ -13,3 +13,10 @@ data class ExplorerState(
     val currentFolderContent: List<LunarMetaData> = emptyList(),
     val currentFolderInfo: LunarMetaData? = null
 )
+
+enum class AppBarActionEnum{
+    SEARCH,
+    CREATE,
+    CREATE_FILE,
+    CREATE_FOLDER
+}

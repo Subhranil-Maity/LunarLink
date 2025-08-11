@@ -25,7 +25,6 @@ fun LargeScreenExplorer(
     appBar: @Composable () -> Unit,
     listPane: @Composable () -> Unit,
     detailPlane: @Composable () -> Unit,
-    otherBackgroundColor: Color
 ) {
     Scaffold(
         topBar = {

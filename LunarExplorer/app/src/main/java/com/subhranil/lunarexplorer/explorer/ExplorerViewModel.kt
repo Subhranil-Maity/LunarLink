@@ -76,7 +76,12 @@ class ExplorerViewModel: ViewModel() {
             ExplorerActions.Refresh -> onRefresh()
             is ExplorerActions.GoToPath -> onGoToPath(action.path)
             ExplorerActions.OnBackPressed -> onBackPressed()
+            is ExplorerActions.OnActionButtonPressed -> onActionButtonPressed(action.actionType)
         }
+    }
+
+    private fun onActionButtonPressed(actionType: AppBarActionEnum) {
+        // TODO: IMPLEMENT
     }
 
     private fun onBackPressed() {

@@ -2,24 +2,16 @@ package com.subhranil.lunarexplorer.explorer.adaptative
 
 import android.app.Activity
 import androidx.activity.compose.LocalActivity
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import com.subhranil.lunarexplorer.explorer.ExplorerActions
 import com.subhranil.lunarexplorer.explorer.adaptative.large.LargeScreenExplorer
 import com.subhranil.lunarexplorer.explorer.adaptative.small.SmallScreenExplorer
-import kotlinx.coroutines.launch
 
 
 //data class AdaptativeAppBarState(
@@ -34,11 +26,13 @@ fun AdaptativeExplorer(
     drawerState: DrawerState,
     topAppBar: @Composable (Boolean) -> Unit,
     listPane: @Composable () -> Unit,
-    detailPlane: @Composable () -> Unit
+    detailPlane: @Composable () -> Unit,
+    extraOptionsPage: @Composable () -> Unit = {},
+    onAction: (ExplorerActions) -> Unit,
+    shouldShowExtraOptions: Boolean = false
 ) {
     val activity = LocalActivity.current as Activity
     val windowSize = calculateWindowSizeClass(activity)
-    val scope = rememberCoroutineScope()
     when (windowSize.widthSizeClass) {
         WindowWidthSizeClass.Compact -> {
             SmallScreenExplorer(
@@ -49,7 +43,10 @@ fun AdaptativeExplorer(
                 },
                 listPane = listPane,
                 detailPlane = detailPlane,
-                drawerState = drawerState
+                drawerState = drawerState,
+                extraOptionsPage = extraOptionsPage,
+                shouldShowExtraOptions = shouldShowExtraOptions,
+                onAction = onAction
             )
         }
 
@@ -61,7 +58,9 @@ fun AdaptativeExplorer(
                     topAppBar(false)
                 },
                 listPane = listPane,
-                detailPlane = detailPlane
+                detailPlane = detailPlane,
+                extraOptionsPage = extraOptionsPage,
+                shouldShowExtraOptions = shouldShowExtraOptions
             )
         }
     }

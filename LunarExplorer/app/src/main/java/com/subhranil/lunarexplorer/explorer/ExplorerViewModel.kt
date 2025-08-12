@@ -1,11 +1,15 @@
 package com.subhranil.lunarexplorer.explorer
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
+import com.subhranil.lunarexplorer.models.EntryType
+import com.subhranil.lunarexplorer.models.LunarMetaData
 import com.subhranil.lunarexplorer.models.Mounts
 import com.subhranil.lunarexplorer.repository.FileSystemRepository
 import com.subhranil.lunarexplorer.result.FileSystemErrors
@@ -87,6 +91,41 @@ class ExplorerViewModel : ViewModel() {
             is ExplorerActions.OnActionButtonPressed -> onActionButtonPressed(action.actionType)
             is ExplorerActions.OnSearchTextChange -> onSearchTextChange(action.search)
             ExplorerActions.OnSearchDisMissed -> onSearchDismissed()
+            is ExplorerActions.OnItemClick -> onItemClicked(action.metaData)
+            is ExplorerActions.OnLongPressed -> onLongPressed(action.metaData)
+            ExplorerActions.OnExtraOptionsDisMiss -> onExtraOptionDismissed()
+        }
+    }
+
+    private fun onExtraOptionDismissed() {
+        if (_state.value.showExtraOptions == null){
+            return
+        }
+        _state.update {
+            it.copy(
+                showExtraOptions = null
+            )
+        }
+    }
+
+    private fun onLongPressed(metaData: LunarMetaData) {
+        showExtraOptions(metaData)
+    }
+
+    private fun onItemClicked(metaData: LunarMetaData) {
+        if (metaData.entryType == EntryType.DIRECTORY) {
+//            onAction(ExplorerActions.GoToPath(.absolutePath))
+            onGoToPath(metaData.absolutePath)
+        } else {
+            showExtraOptions(metaData)
+        }
+    }
+
+    private fun showExtraOptions(metaData: LunarMetaData){
+        _state.update {
+            it.copy(
+                showExtraOptions = metaData
+            )
         }
     }
 
@@ -125,6 +164,7 @@ class ExplorerViewModel : ViewModel() {
                 val path = _state.value.pathHistory.lastOrNull() ?: return
                 requestNameForFolder(path)
             }
+
             AppBarActionEnum.SEARCH -> {
                 _state.update {
                     it.copy(
@@ -200,6 +240,7 @@ class ExplorerViewModel : ViewModel() {
     }
 
     private fun onBackPressed() {
+        onExtraOptionDismissed()
         if (!_state.value.pathHistory.isEmpty()) {
             val list = _state.value.pathHistory.toMutableList()
             list.removeAt(list.lastIndex)
@@ -231,6 +272,7 @@ class ExplorerViewModel : ViewModel() {
 
     fun onRefresh() {
         // TODO: Add full path history and its content in state to avoid refetching
+        onExtraOptionDismissed()
         if (_state.value.pathHistory.isEmpty()) {
             return
         }
@@ -240,7 +282,7 @@ class ExplorerViewModel : ViewModel() {
                     _state.update { it ->
                         it.copy(
                             currentFolderContent = content.entries.sortedBy { ent -> ent.entryType },
-                            currentFolderInfo = content.metaData
+                            currentFolderInfo = content.metaData,
                         )
                     }
                 }

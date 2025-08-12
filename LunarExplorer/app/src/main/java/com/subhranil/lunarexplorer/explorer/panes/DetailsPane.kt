@@ -52,18 +52,18 @@ fun DetailsPane(
                 state = lazyState,
             ) {
                 items(
-                    items = if (state.showSearch){
+                    items = if (state.showSearch) {
                         state.filteredFolderContent
-                    }else{
+                    } else {
                         state.currentFolderContent
                     },
                     key = { it.absolutePath }
                 ) {
-                    LinearEntry(metaData = it) {
-                        if (it.entryType == EntryType.DIRECTORY) {
-                            onAction(ExplorerActions.GoToPath(it.absolutePath))
-                        }
-                    }
+                    LinearEntry(metaData = it, onClick = {
+                        onAction(ExplorerActions.OnItemClick(it))
+                    }, onLongPress = {
+                        onAction(ExplorerActions.OnLongPressed(it))
+                    })
                 }
             }
         }

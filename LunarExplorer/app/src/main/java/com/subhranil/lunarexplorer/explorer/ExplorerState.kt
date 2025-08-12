@@ -13,7 +13,8 @@ data class ExplorerState(
     val currentFolderContent: List<LunarMetaData> = emptyList(),
     val currentFolderInfo: LunarMetaData? = null,
     val filteredFolderContent: List<LunarMetaData> = emptyList(),
-    val showSearch: Boolean = false
+    val showSearch: Boolean = false,
+    val showExtraOptions: LunarMetaData? = null
 )
 
 

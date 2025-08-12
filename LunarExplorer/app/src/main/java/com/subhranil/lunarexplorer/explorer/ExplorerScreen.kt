@@ -1,6 +1,7 @@
 package com.subhranil.lunarexplorer.explorer
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.subhranil.lunarexplorer.explorer.actions.ExplorerTopAppBar
 import com.subhranil.lunarexplorer.explorer.adaptative.AdaptativeExplorer
+import com.subhranil.lunarexplorer.explorer.options.OptionPage
+import com.subhranil.lunarexplorer.explorer.options.getExplorerOptions
 import com.subhranil.lunarexplorer.explorer.panes.DetailsPane
 import com.subhranil.lunarexplorer.explorer.panes.ExplorerSideBar
 import kotlinx.coroutines.launch
@@ -80,13 +83,23 @@ fun ExplorerScreen(
         return
     }
 
-    if (state.showSearch) {
-        BackHandler(enabled = true) {
-            onAction(ExplorerActions.OnSearchDisMissed)
-        }
-    }else if (!state.pathHistory.isEmpty()){
-        BackHandler(enabled = true) {
-            onAction(ExplorerActions.OnBackPressed)
+    val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+
+    BackHandler(enabled = true) {
+        when {
+            state.showSearch -> {
+                onAction(ExplorerActions.OnSearchDisMissed)
+            }
+            state.showExtraOptions != null -> {
+                onAction(ExplorerActions.OnExtraOptionsDisMiss)
+            }
+            state.pathHistory.isNotEmpty() -> {
+                onAction(ExplorerActions.OnBackPressed)
+            }
+            else -> {
+                // "super" call — let system handle back normally
+                dispatcher?.onBackPressed()
+            }
         }
     }
     HandleRequest(
@@ -94,6 +107,7 @@ fun ExplorerScreen(
         dismissNameRequest = { viewModel.dismissNameRequest() },
         confirmName = { viewModel.confirmName(it) },
     )
+//    AdaptativeExtraOptionsHandler(state, onAction)
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     AdaptativeExplorer(
@@ -121,7 +135,16 @@ fun ExplorerScreen(
                 state = state,
                 onAction = onAction
             )
-        }
+        },
+        shouldShowExtraOptions = state.showExtraOptions != null,
+        extraOptionsPage = {
+            OptionPage(
+                state = state,
+                onAction = onAction,
+                options = getExplorerOptions()
+            )
+        },
+        onAction = onAction
     )
 }
 

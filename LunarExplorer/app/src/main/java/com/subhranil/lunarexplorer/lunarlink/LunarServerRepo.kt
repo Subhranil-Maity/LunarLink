@@ -231,5 +231,144 @@ class LunarServerRepo(
             return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
         }
     }
+
+    override suspend fun delete(
+        path: String,
+        permanently: Boolean
+    ): FileSystemResult<Unit> {
+        try {
+            val response = client.request("$baseUrl/api/v1/fs/delete") {
+                method = HttpMethod.Delete
+                bearerAuth(token = token)
+                parameter("path", path)
+                parameter("permanent", permanently)
+            }
+            when (response.status.value) {
+                HttpStatusCode.OK.value -> {
+                    return LunarResult.Success(Unit)
+                }
+                HttpStatusCode.Unauthorized.value -> {
+                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
+                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
+                }
+                else -> {
+                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
+                    Log.d("RemoteServerRepo", errorResponse.message)
+                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                }
+            }
+        }
+        catch (e: Exception) {
+            Log.d("RemoteServerRepo", e.message.toString())
+            currentCoroutineContext().ensureActive()
+            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        }
+    }
+
+    override suspend fun rename(
+        path: String,
+        newPath: String,
+        shouldOverride: Boolean
+    ): FileSystemResult<Unit> {
+        try {
+            val response = client.request("$baseUrl/api/v1/fs/rename") {
+                method = HttpMethod.Patch
+                bearerAuth(token = token)
+                parameter("path", path)
+                parameter("new_path", newPath)
+                parameter("should_overwrite", shouldOverride)
+            }
+            when (response.status.value) {
+                HttpStatusCode.OK.value -> {
+                    return LunarResult.Success(Unit)
+                }
+                HttpStatusCode.Unauthorized.value -> {
+                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
+                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
+                }
+                else -> {
+                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
+                    Log.d("RemoteServerRepo", errorResponse.message)
+                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                }
+            }
+        }
+        catch (e: Exception) {
+            Log.d("RemoteServerRepo", e.message.toString())
+            currentCoroutineContext().ensureActive()
+            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        }
+    }
+
+    override suspend fun copy(
+        path: String,
+        newPath: String,
+        shouldOverride: Boolean
+    ): FileSystemResult<Unit> {
+        try {
+            val response = client.request("$baseUrl/api/v1/fs/copy") {
+                method = HttpMethod.Post
+                bearerAuth(token = token)
+                parameter("path", path)
+                parameter("new_path", newPath)
+                parameter("should_overwrite", shouldOverride)
+            }
+            when (response.status.value) {
+                HttpStatusCode.OK.value -> {
+                    return LunarResult.Success(Unit)
+                }
+                HttpStatusCode.Unauthorized.value -> {
+                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
+                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
+                }
+                else -> {
+                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
+                    Log.d("RemoteServerRepo", errorResponse.message)
+                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                }
+            }
+        }
+        catch (e: Exception) {
+            Log.d("RemoteServerRepo", e.message.toString())
+            currentCoroutineContext().ensureActive()
+            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        }
+    }
+
+
+    override suspend fun move(
+        path: String,
+        newPath: String,
+        shouldOverride: Boolean
+    ): FileSystemResult<Unit> {
+        try {
+            val response = client.request("$baseUrl/api/v1/fs/move") {
+                method = HttpMethod.Patch
+                bearerAuth(token = token)
+                parameter("path", path)
+                parameter("new_path", newPath)
+                parameter("should_overwrite", shouldOverride)
+            }
+            when (response.status.value) {
+                HttpStatusCode.OK.value -> {
+                    return LunarResult.Success(Unit)
+                }
+                HttpStatusCode.Unauthorized.value -> {
+                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
+                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
+                }
+                else -> {
+                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
+                    Log.d("RemoteServerRepo", errorResponse.message)
+                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                }
+            }
+        }
+        catch (e: Exception) {
+            Log.d("RemoteServerRepo", e.message.toString())
+            currentCoroutineContext().ensureActive()
+            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        }
+    }
 }
 

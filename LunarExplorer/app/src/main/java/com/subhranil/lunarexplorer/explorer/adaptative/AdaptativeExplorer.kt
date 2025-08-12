@@ -14,10 +14,6 @@ import com.subhranil.lunarexplorer.explorer.adaptative.large.LargeScreenExplorer
 import com.subhranil.lunarexplorer.explorer.adaptative.small.SmallScreenExplorer
 
 
-//data class AdaptativeAppBarState(
-//    val title: @Composable () -> Unit,
-//)
-
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AdaptativeExplorer(
@@ -29,7 +25,10 @@ fun AdaptativeExplorer(
     detailPlane: @Composable () -> Unit,
     extraOptionsPage: @Composable () -> Unit = {},
     onAction: (ExplorerActions) -> Unit,
-    shouldShowExtraOptions: Boolean = false
+    shouldShowExtraOptions: Boolean = false,
+    floatingActionButton: @Composable (isLarge: Boolean) -> Unit = {},
+    snackbarHost : @Composable () -> Unit,
+
 ) {
     val activity = LocalActivity.current as Activity
     val windowSize = calculateWindowSizeClass(activity)
@@ -46,7 +45,11 @@ fun AdaptativeExplorer(
                 drawerState = drawerState,
                 extraOptionsPage = extraOptionsPage,
                 shouldShowExtraOptions = shouldShowExtraOptions,
-                onAction = onAction
+                onAction = onAction,
+                floatingActionButton = {
+                    floatingActionButton(false)
+                },
+                snackbarHost = snackbarHost
             )
         }
 
@@ -60,7 +63,11 @@ fun AdaptativeExplorer(
                 listPane = listPane,
                 detailPlane = detailPlane,
                 extraOptionsPage = extraOptionsPage,
-                shouldShowExtraOptions = shouldShowExtraOptions
+                shouldShowExtraOptions = shouldShowExtraOptions,
+                floatingActionButton = {
+                    floatingActionButton(false)
+                },
+                snackbarHost = snackbarHost
             )
         }
     }

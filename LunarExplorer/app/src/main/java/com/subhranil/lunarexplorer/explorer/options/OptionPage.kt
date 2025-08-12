@@ -6,14 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,7 +32,7 @@ fun OptionPage(
     onAction: (ExplorerActions) -> Unit,
     options: List<ExplorerOptions>
 ) {
-    state.showExtraOptions?.let { selected ->
+    state.showOptions?.let { selected ->
         val (icon, tint) = getIcon(selected)
         Column(
             modifier = modifier
@@ -61,7 +58,7 @@ fun OptionPage(
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(
-                    onClick = { onAction(ExplorerActions.OnExtraOptionsDisMiss) }
+                    onClick = { onAction(ExplorerActions.OnOptionsDismiss) }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -77,7 +74,9 @@ fun OptionPage(
             options.forEachIndexed { index, option ->
                 ThisOption(
                     explorerOptions = option,
-                    onClickListener = { /* handle click */ }
+                    onClickListener = {
+                        onAction(ExplorerActions.OnOptionClicked(option, selected))
+                    }
                 )
 
                 // Even thinner divider for separation

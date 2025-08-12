@@ -5,22 +5,30 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.subhranil.lunarexplorer.explorer.actions.ExplorerTopAppBar
 import com.subhranil.lunarexplorer.explorer.adaptative.AdaptativeExplorer
+import com.subhranil.lunarexplorer.explorer.clipboard.ClipboardFab
+import com.subhranil.lunarexplorer.explorer.handlers.PendingNameHandler
+import com.subhranil.lunarexplorer.explorer.handlers.PendingRequestHandler
 import com.subhranil.lunarexplorer.explorer.options.OptionPage
 import com.subhranil.lunarexplorer.explorer.options.getExplorerOptions
 import com.subhranil.lunarexplorer.explorer.panes.DetailsPane
@@ -84,14 +95,21 @@ fun ExplorerScreen(
     }
 
     val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    val snackbarHostState = remember { SnackbarHostState() }
 
+    LaunchedEffect(state.snackbarMessage) {
+        state.snackbarMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg.text)
+            onAction(ExplorerActions.OnClearSnackBar)
+        }
+    }
     BackHandler(enabled = true) {
         when {
             state.showSearch -> {
                 onAction(ExplorerActions.OnSearchDisMissed)
             }
-            state.showExtraOptions != null -> {
-                onAction(ExplorerActions.OnExtraOptionsDisMiss)
+            state.showOptions != null -> {
+                onAction(ExplorerActions.OnOptionsDismiss)
             }
             state.pathHistory.isNotEmpty() -> {
                 onAction(ExplorerActions.OnBackPressed)
@@ -102,12 +120,14 @@ fun ExplorerScreen(
             }
         }
     }
-    HandleRequest(
+    PendingNameHandler(
         viewModel.pendingNameRequest,
         dismissNameRequest = { viewModel.dismissNameRequest() },
         confirmName = { viewModel.confirmName(it) },
     )
-//    AdaptativeExtraOptionsHandler(state, onAction)
+    PendingRequestHandler(
+        state = state
+    )
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     AdaptativeExplorer(
@@ -136,7 +156,7 @@ fun ExplorerScreen(
                 onAction = onAction
             )
         },
-        shouldShowExtraOptions = state.showExtraOptions != null,
+        shouldShowExtraOptions = state.showOptions != null,
         extraOptionsPage = {
             OptionPage(
                 state = state,
@@ -144,58 +164,28 @@ fun ExplorerScreen(
                 options = getExplorerOptions()
             )
         },
-        onAction = onAction
-    )
-}
-
-@Composable
-fun HandleRequest(
-    request: PendingNameRequest?,
-    dismissNameRequest: () -> Unit,
-    confirmName: (String) -> Unit
-) {
-
-    if (request != null) {
-        var input by remember { mutableStateOf("") }
-
-        AlertDialog(
-            onDismissRequest = { dismissNameRequest() },
-            title = {
-                Text(
-                    if (request.type == NameRequestType.FILE)
-                        "Enter file name"
-                    else
-                        "Enter folder name"
-                )
-            },
-            text = {
-                TextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    placeholder = {
-                        Text(
-                            if (request.type == NameRequestType.FILE)
-                                "example.txt"
-                            else
-                                "New Folder"
-                        )
-                    }
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    if (input != ""){
-                        confirmName(input)
-                    }
-                }) {
-                    Text("Create")
+        onAction = onAction,
+        floatingActionButton = { isLarge ->
+            ClipboardFab(
+                clipboard = state.clipboard,
+                isLarge = isLarge,
+                onPasteClick = {
+                    onAction(ExplorerActions.OnPaste)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { dismissNameRequest() }) {
-                    Text("Cancel")
+            )
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        state.snackbarMessage?.icon?.let { icon ->
+                            Icon(icon, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(data.visuals.message)
+                    }
                 }
             }
-        )
-    }
+        }
+    )
 }

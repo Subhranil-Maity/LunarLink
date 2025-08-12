@@ -41,7 +41,9 @@ fun SmallScreenExplorer(
     drawerState: DrawerState,
     onAction: (ExplorerActions) -> Unit,
     extraOptionsPage: @Composable () -> Unit = {},
-    shouldShowExtraOptions: Boolean = false
+    floatingActionButton: @Composable () -> Unit = {},
+    shouldShowExtraOptions: Boolean = false,
+    snackbarHost : @Composable () -> Unit,
 ) {
     ExtraOptionsDrawer(
         shouldShow = shouldShowExtraOptions,
@@ -69,8 +71,14 @@ fun SmallScreenExplorer(
         },
         content = {
             Scaffold(
+                snackbarHost = {
+                    snackbarHost()
+                },
                 topBar = {
                     appBar()
+                },
+                floatingActionButton = {
+                    floatingActionButton()
                 }
             ) { padding ->
                 Box(

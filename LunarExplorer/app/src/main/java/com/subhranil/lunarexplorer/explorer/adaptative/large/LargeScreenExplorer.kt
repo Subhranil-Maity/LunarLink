@@ -38,11 +38,19 @@ fun LargeScreenExplorer(
     listPane: @Composable () -> Unit,
     detailPlane: @Composable () -> Unit,
     extraOptionsPage: @Composable () -> Unit = {},
-    shouldShowExtraOptions: Boolean = false
+    floatingActionButton: @Composable () -> Unit = {},
+    shouldShowExtraOptions: Boolean = false,
+    snackbarHost : @Composable () -> Unit = {},
 ) {
     val showLargeExtraOptionsInSideBar = true
     Scaffold(
-        topBar = { appBar() }
+        snackbarHost = {
+            snackbarHost()
+        },
+        topBar = { appBar() },
+        floatingActionButton = {
+            floatingActionButton()
+        }
     ) { innerPadding ->
         val density = LocalDensity.current
         val top = with(density) {

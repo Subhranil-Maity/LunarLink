@@ -1,22 +1,33 @@
 package com.subhranil.lunarexplorer.explorer
 
-import android.content.Context
-import android.widget.Toast
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.subhranil.lunarexplorer.explorer.clipboard.NameConflictRequest
+import com.subhranil.lunarexplorer.explorer.message.SnackbarMessage
+import com.subhranil.lunarexplorer.explorer.options.ExplorerOptionType
+import com.subhranil.lunarexplorer.explorer.options.ExplorerOptions
+import com.subhranil.lunarexplorer.fs.CollisionType
+import com.subhranil.lunarexplorer.fs.findCollisions
+import com.subhranil.lunarexplorer.fs.generateNonConflictingPath
+import com.subhranil.lunarexplorer.fs.getBasePath
+import com.subhranil.lunarexplorer.fs.getNewPath
 import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
 import com.subhranil.lunarexplorer.models.EntryType
+import com.subhranil.lunarexplorer.models.FolderInfo
 import com.subhranil.lunarexplorer.models.LunarMetaData
 import com.subhranil.lunarexplorer.models.Mounts
+import com.subhranil.lunarexplorer.models.isDir
 import com.subhranil.lunarexplorer.repository.FileSystemRepository
 import com.subhranil.lunarexplorer.result.FileSystemErrors
 import com.subhranil.lunarexplorer.result.LunarResult
 import com.subhranil.lunarexplorer.result.RootError
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -28,6 +39,7 @@ class ExplorerViewModel : ViewModel() {
     val state = _state.asStateFlow()
     var pendingNameRequest by mutableStateOf<PendingNameRequest?>(null)
         private set
+
     val fs: FileSystemRepository = LunarServerRepo(
         client = get().get<HttpClient>(),
         baseUrl = "http://192.168.54.178:8080",
@@ -93,17 +105,314 @@ class ExplorerViewModel : ViewModel() {
             ExplorerActions.OnSearchDisMissed -> onSearchDismissed()
             is ExplorerActions.OnItemClick -> onItemClicked(action.metaData)
             is ExplorerActions.OnLongPressed -> onLongPressed(action.metaData)
-            ExplorerActions.OnExtraOptionsDisMiss -> onExtraOptionDismissed()
+            ExplorerActions.OnOptionsDismiss -> onExtraOptionDismissed()
+            is ExplorerActions.OnOptionClicked -> onOptionClicked(
+                action.explorerOptions,
+                action.metaData
+            )
+            ExplorerActions.OnPaste -> onPaste()
+            ExplorerActions.OnClearSnackBar -> clearSnackbar()
+        }
+    }
+
+    private fun onPaste() {
+        _state.value.clipboard?.let { clipboardState ->
+            when (clipboardState.actionType) {
+                ClipboardActionType.COPY -> doCopy(clipboardState)
+                ClipboardActionType.MOVE -> doMove(clipboardState)
+            }
+        }
+        clearClipBoard()
+    }
+    private fun copyItem(
+        metadata: LunarMetaData,
+        currentPath: String,
+        shouldOverride: Boolean = false,
+        generateUniqueName: Boolean = false
+    ) {
+        viewModelScope.launch {
+            val targetPath = if (generateUniqueName) {
+                generateNonConflictingPath(
+                    baseDir = currentPath,
+                    originalName = metadata.name,
+                    existingItems = _state.value.currentFolderContent
+                )
+            } else {
+                getNewPath(metadata, currentPath)
+            }
+
+            withHandledError(
+                fs.copy(
+                    path = metadata.absolutePath,
+                    newPath = targetPath,
+                    shouldOverride = shouldOverride
+                )
+            ) {
+                // success handling if needed
+            }
+        }
+    }
+    private fun moveItem(
+        metadata: LunarMetaData,
+        destinationPath: String,
+        shouldOverride: Boolean = false
+    ) {
+        viewModelScope.launch {
+            withHandledError(
+                fs.move(
+                    path = metadata.absolutePath,
+                    newPath = getNewPath(metadata, destinationPath),
+                    shouldOverride = shouldOverride
+                )
+            ) {
+                // success
+            }
+        }
+    }
+    private fun doMove(clipboardState: ClipboardState) {
+        if (_state.value.pathHistory.isEmpty()) return
+
+        val currentPath = _state.value.pathHistory.last()
+        var applyToAllAction: ((LunarMetaData) -> Unit)? = null
+
+        clipboardState.items.forEach { metadata ->
+            val collision = findCollisions(
+                metaData = metadata,
+                currentPath = currentPath,
+                currentFolderContents = _state.value.currentFolderContent
+            )
+
+            when (collision) {
+                CollisionType.NONE -> {
+                    moveItem(metadata, currentPath)
+                }
+
+                CollisionType.PASTE_INTO_SELF -> {
+                    // Skip silently
+                }
+
+                CollisionType.NAME_CONFLICT -> {
+                    if (applyToAllAction != null) {
+                        applyToAllAction?.invoke(metadata)
+                    } else {
+                        _state.update {
+                            it.copy(
+                                pendingNameConflict = NameConflictRequest(
+                                    originalName = metadata.name,
+                                    originalPath = metadata.absolutePath,
+                                    destinationPath = currentPath,
+                                    onReplace = { all ->
+                                        moveItem(metadata, currentPath, shouldOverride = true)
+                                        if (all) applyToAllAction = { m ->
+                                            moveItem(m, currentPath, shouldOverride = true)
+                                        }
+                                        clearPendingConflict()
+                                    },
+                                    onKeepBoth = { all ->
+                                        val newPath = generateNonConflictingPath(
+                                            baseDir = currentPath,
+                                            originalName = metadata.name,
+                                            existingItems = _state.value.currentFolderContent
+                                        )
+                                        moveItem(metadata, newPath)
+                                        if (all) applyToAllAction = { m ->
+                                            val np = generateNonConflictingPath(
+                                                baseDir = currentPath,
+                                                originalName = m.name,
+                                                existingItems = _state.value.currentFolderContent
+                                            )
+                                            moveItem(m, np)
+                                        }
+                                        clearPendingConflict()
+                                    },
+                                    onSkip = { all ->
+                                        if (all) applyToAllAction = { /* skip */ }
+                                        clearPendingConflict()
+                                    }
+                                )
+                            )
+                        }
+                        return
+                    }
+                }
+            }
+        }
+
+        onRefresh()
+    }
+    private fun clearPendingConflict() {
+        _state.update { it.copy(pendingNameConflict = null) }
+    }
+
+
+
+    private fun doCopy(clipboardState: ClipboardState, startIndex: Int = 0, applyToAll: ((LunarMetaData) -> Unit)? = null) {
+        if (_state.value.pathHistory.isEmpty()) return
+
+        val currentPath = _state.value.pathHistory.last()
+        var applyToAllAction = applyToAll
+
+        val items = clipboardState.items
+        if (startIndex >= items.size) {
+            onRefresh()
+            return
+        }
+
+        val metadata = items[startIndex]
+        val collision = findCollisions(metadata, currentPath, _state.value.currentFolderContent)
+
+        when (collision) {
+            CollisionType.NONE -> {
+                copyItem(metadata, currentPath)
+                doCopy(clipboardState, startIndex + 1, applyToAllAction)
+            }
+
+            CollisionType.PASTE_INTO_SELF -> {
+                doCopy(clipboardState, startIndex + 1, applyToAllAction)
+            }
+
+            CollisionType.NAME_CONFLICT -> {
+                if (applyToAllAction != null) {
+                    applyToAllAction(metadata)
+                    doCopy(clipboardState, startIndex + 1, applyToAllAction)
+                } else {
+                    _state.update {
+                        it.copy(
+                            pendingNameConflict = NameConflictRequest(
+                                originalName = metadata.name,
+                                originalPath = metadata.absolutePath,
+                                destinationPath = currentPath,
+                                onReplace = { all ->
+                                    copyItem(metadata, currentPath, shouldOverride = true)
+                                    if (all) applyToAllAction = { m ->
+                                        copyItem(m, currentPath, shouldOverride = true)
+                                    }
+                                    _state.update { s -> s.copy(pendingNameConflict = null) }
+                                    doCopy(clipboardState, startIndex + 1, applyToAllAction)
+                                },
+                                onKeepBoth = { all ->
+                                    copyItem(metadata, currentPath, generateUniqueName = true)
+                                    if (all) applyToAllAction = { m ->
+                                        copyItem(m, currentPath, generateUniqueName = true)
+                                    }
+                                    _state.update { s -> s.copy(pendingNameConflict = null) }
+                                    doCopy(clipboardState, startIndex + 1, applyToAllAction)
+                                },
+                                onSkip = { all ->
+                                    if (all) applyToAllAction = { /* skip */ }
+                                    _state.update { s -> s.copy(pendingNameConflict = null) }
+                                    doCopy(clipboardState, startIndex + 1, applyToAllAction)
+                                }
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
+    private fun onOptionClicked(
+        explorerOptions: ExplorerOptions,
+        metaData: LunarMetaData
+    ) {
+        when (explorerOptions.type) {
+            ExplorerOptionType.MOVE -> onSingleMoveSelected(metaData)
+            ExplorerOptionType.COPY -> onSingleCopySelected(metaData)
+            ExplorerOptionType.DELETE -> onDelete(metaData)
+            ExplorerOptionType.RENAME -> onRename(metaData)
+        }
+        onExtraOptionDismissed()
+    }
+
+    private fun onRename(metaData: LunarMetaData) {
+        val basePath = getBasePath(metaData)
+        pendingNameRequest = PendingNameRequest(
+            type = if(metaData.entryType == EntryType.DIRECTORY){
+                NameRequestType.FOLDER
+            }else{
+                NameRequestType.FILE
+            },
+            basePath = basePath,
+            action = NameRequestAction.RENAME,
+            currentName = metaData.name
+        ){ name->
+            viewModelScope.launch {
+                withHandledError(fs.rename(metaData.absolutePath, "$basePath/$name",false)){
+                    showSnackbar("Renamed from ${metaData.name} to $name")
+                    onRefresh()
+                }
+            }
+        }
+    }
+
+    private fun onDelete(metaData: LunarMetaData) {
+        viewModelScope.launch {
+            withHandledError(fs.delete(metaData.absolutePath, false)){
+                val list = _state.value.currentFolderContent.toMutableList()
+                list.removeIf { it.absolutePath == metaData.absolutePath }
+                _state.update {
+                    it.copy(
+                        currentFolderContent = list
+                    )
+                }
+                showSnackbar("${metaData.name} Deleted", Icons.Default.Check)
+            }
+        }
+    }
+    fun showSnackbar(text: String, icon: ImageVector? = null) {
+        _state.update {
+            it.copy(snackbarMessage = SnackbarMessage(text, icon))
+        }
+    }
+
+    fun clearSnackbar() {
+        _state.update {
+            it.copy(snackbarMessage = null)
+        }
+    }
+
+    private fun onSingleMoveSelected(metaData: LunarMetaData) {
+        clearClipBoard()
+        _state.update {
+            it.copy(
+                clipboard = ClipboardState(
+                    actionType = ClipboardActionType.MOVE,
+                    items = listOf(metaData)
+                )
+            )
+        }
+    }
+
+    private fun clearClipBoard() {
+        _state.update {
+            it.copy(
+                clipboard = null
+            )
+        }
+    }
+
+    private fun onSingleCopySelected(metaData: LunarMetaData): Unit {
+        clearClipBoard()
+        _state.update {
+            it.copy(
+                clipboard = ClipboardState(
+                    actionType = ClipboardActionType.COPY,
+                    items = listOf(metaData)
+                )
+            )
         }
     }
 
     private fun onExtraOptionDismissed() {
-        if (_state.value.showExtraOptions == null){
+        if (_state.value.showOptions == null) {
             return
         }
         _state.update {
             it.copy(
-                showExtraOptions = null
+                showOptions = null
             )
         }
     }
@@ -121,10 +430,10 @@ class ExplorerViewModel : ViewModel() {
         }
     }
 
-    private fun showExtraOptions(metaData: LunarMetaData){
+    private fun showExtraOptions(metaData: LunarMetaData) {
         _state.update {
             it.copy(
-                showExtraOptions = metaData
+                showOptions = metaData
             )
         }
     }

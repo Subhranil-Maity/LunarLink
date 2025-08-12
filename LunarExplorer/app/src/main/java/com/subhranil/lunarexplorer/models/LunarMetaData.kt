@@ -6,7 +6,7 @@ import java.time.LocalDateTime
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-data class LunarMetaData constructor(
+data class LunarMetaData(
     val name: String,
     val size: Long,
     val entryType: EntryType,
@@ -15,7 +15,9 @@ data class LunarMetaData constructor(
     val lastModified: Instant,
 )
 
-enum class EntryType{
+fun LunarMetaData.isDir(): Boolean = (this.entryType == EntryType.DIRECTORY)
+
+enum class EntryType {
     DIRECTORY,
     FILE,
     SYMLINK,

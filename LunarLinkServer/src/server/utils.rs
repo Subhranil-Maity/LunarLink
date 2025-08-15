@@ -1,3 +1,4 @@
+use std::env;
 use axum::extract::multipart::MultipartError;
 use axum::http::StatusCode;
 use axum::Json;
@@ -5,6 +6,7 @@ use axum::response::{IntoResponse, Response};
 use rand::distr::Alphanumeric;
 use rand::rand_core::OsRng;
 use rand::{Rng, RngCore};
+use regex::Regex;
 use serde::Serialize;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
@@ -116,4 +118,13 @@ pub async fn assemble_file(temp_dir: &str, file_name: &str, total_chunks: usize)
     Ok(())
 }
 
+pub fn expand_env_vars(path: &str) -> String {
+    // Match %VAR_NAME% (allowing letters, digits, and underscores)
+    let re = Regex::new(r"%([^%]+)%").unwrap();
+
+    re.replace_all(path, |caps: &regex::Captures| {
+        let var_name = &caps[1];
+        env::var(var_name).unwrap_or_else(|_| caps[0].to_string())
+    }).into_owned()
+}
 

@@ -17,7 +17,8 @@ enum class ExplorerOptionType {
     MOVE,
     COPY,
     DELETE,
-    RENAME
+    RENAME,
+    DOWNLOAD
 }
 
 @Composable

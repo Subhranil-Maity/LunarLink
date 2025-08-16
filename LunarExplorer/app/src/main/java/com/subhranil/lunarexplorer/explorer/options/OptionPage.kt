@@ -20,10 +20,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
+import com.subhranil.lunarexplorer.R
 import com.subhranil.lunarexplorer.explorer.ExplorerActions
 import com.subhranil.lunarexplorer.explorer.ExplorerState
 import com.subhranil.lunarexplorer.icons.getIcon
+import com.subhranil.lunarexplorer.models.EntryType
 
 @Composable
 fun OptionPage(
@@ -33,6 +37,15 @@ fun OptionPage(
     options: List<ExplorerOptions>
 ) {
     state.showOptions?.let { selected ->
+        val options = options.toMutableList()
+        // Hot Fix
+        if (selected.entryType == EntryType.FILE){
+            options.add(ExplorerOptions(
+                label = "Download ALl At Once",
+                icon = ImageVector.vectorResource(R.drawable.download_icon),
+                type = ExplorerOptionType.DOWNLOAD
+            ))
+        }
         val (icon, tint) = getIcon(selected)
         Column(
             modifier = modifier

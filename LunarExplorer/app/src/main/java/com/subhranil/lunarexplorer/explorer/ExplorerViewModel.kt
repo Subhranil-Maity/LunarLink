@@ -1,5 +1,6 @@
 package com.subhranil.lunarexplorer.explorer
 
+import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.getValue
@@ -17,6 +18,7 @@ import com.subhranil.lunarexplorer.fs.findCollisions
 import com.subhranil.lunarexplorer.fs.generateNonConflictingPath
 import com.subhranil.lunarexplorer.fs.getBasePath
 import com.subhranil.lunarexplorer.fs.getNewPath
+import com.subhranil.lunarexplorer.io.saveBytesToDownloadsWithGuessedMime
 import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
 import com.subhranil.lunarexplorer.models.EntryType
 import com.subhranil.lunarexplorer.models.FolderInfo
@@ -323,8 +325,32 @@ class ExplorerViewModel : ViewModel() {
             ExplorerOptionType.COPY -> onSingleCopySelected(metaData)
             ExplorerOptionType.DELETE -> onDelete(metaData)
             ExplorerOptionType.RENAME -> onRename(metaData)
+            ExplorerOptionType.DOWNLOAD -> onDownload(metaData)
         }
         onExtraOptionDismissed()
+    }
+
+    private fun onDownload(metaData: LunarMetaData) {
+        if (metaData.entryType == EntryType.DIRECTORY) return
+        Toast.makeText(get().get(), "WARNING: This feature is Experimental", Toast.LENGTH_SHORT).show()
+        if (metaData.size >= 15000000){
+            Toast.makeText(get().get(), "File May Be too Big TO Download At ONCE", Toast.LENGTH_SHORT).show()
+
+        }
+        viewModelScope.launch {
+            withHandledError(fs.getCompleteFile(metaData.absolutePath)){
+//                Toast.makeText(get().get(), it.size.toString(), Toast.LENGTH_SHORT).show()
+                try {
+                    val savedUri = saveBytesToDownloadsWithGuessedMime(get().get(), it, metaData.name)
+                    // savedUri is a content:// URI pointing to the file in Downloads
+                    showSnackbar("Downloaded")
+                } catch (e: Exception) {
+                    // handle error
+                    e.printStackTrace()
+                    showSnackbar("Download Failed")
+                }
+            }
+        }
     }
 
     private fun onRename(metaData: LunarMetaData) {

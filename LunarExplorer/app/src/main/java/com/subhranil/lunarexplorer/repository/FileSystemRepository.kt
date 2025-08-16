@@ -18,4 +18,5 @@ interface FileSystemRepository {
     suspend fun rename(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit>
     suspend fun copy(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit>
     suspend fun move(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit>
+    suspend fun getCompleteFile(path: String): FileSystemResult<ByteArray>
 }

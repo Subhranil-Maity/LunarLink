@@ -4,12 +4,14 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import com.subhranil.lunarexplorer.lunarlink.dto.ErrorDto
+import com.subhranil.lunarexplorer.lunarlink.dto.FileData
 import com.subhranil.lunarexplorer.lunarlink.dto.FolderContentDto
 import com.subhranil.lunarexplorer.lunarlink.dto.LoginRequestDto
 import com.subhranil.lunarexplorer.lunarlink.dto.LoginResponseDto
 import com.subhranil.lunarexplorer.lunarlink.dto.MetaDataDto
 import com.subhranil.lunarexplorer.lunarlink.dto.MountsDto
 import com.subhranil.lunarexplorer.lunarlink.dto.map
+import com.subhranil.lunarexplorer.lunarlink.dto.toByteArrayUnsigned
 import com.subhranil.lunarexplorer.models.FolderInfo
 import com.subhranil.lunarexplorer.models.LunarMetaData
 import com.subhranil.lunarexplorer.models.Mounts
@@ -112,10 +114,13 @@ class LunarServerRepo(
             }
             getResponse<Dto, Response>(response, onSuccess)
         } catch (e: SerializationException) {
+            Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
         }catch (e: JsonConvertException) {
+            Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
         } catch (e: HttpRequestTimeoutException) {
+            Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
         } catch (e: Exception) {
             Log.d("RemoteServerRepo", e.message.toString())
@@ -222,5 +227,14 @@ class LunarServerRepo(
             method = HttpMethod.Patch,
             parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
         )
+
+    override suspend fun getCompleteFile(path: String): FileSystemResult<ByteArray> =
+        makeRequest<FileData, ByteArray>(
+            url = "$baseUrl/api/v1/fs/read_full_file",
+            method = HttpMethod.Get,
+            parameters = mapOf("path" to path)
+        ){
+            it.data.toByteArrayUnsigned()
+        }
 }
 

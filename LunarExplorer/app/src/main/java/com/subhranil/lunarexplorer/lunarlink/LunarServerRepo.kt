@@ -17,30 +17,25 @@ import com.subhranil.lunarexplorer.repository.FileSystemRepository
 import com.subhranil.lunarexplorer.result.FileSystemErrors
 import com.subhranil.lunarexplorer.result.FileSystemResult
 import com.subhranil.lunarexplorer.result.LunarResult
-import com.subhranil.lunarexplorer.ui.theme.LunarExplorerTheme
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.bearerAuth
-import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import io.ktor.client.request.post
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.Url
 import io.ktor.http.contentType
-import io.ktor.util.reflect.TypeInfo
-import io.ktor.util.reflect.typeInfo
+import io.ktor.serialization.JsonConvertException
 import io.ktor.utils.io.InternalAPI
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import org.koin.compose.koinInject
 import org.koin.core.context.GlobalContext.get
-
 
 
 class LunarServerRepo(
@@ -48,8 +43,9 @@ class LunarServerRepo(
     private val baseUrl: String,
     private val userName: String,
     private val pass: String,
-): FileSystemRepository {
+) : FileSystemRepository {
     private var token: String = ""
+
     @OptIn(InternalAPI::class)
     override suspend fun connect(): FileSystemResult<Unit> {
         try {
@@ -67,15 +63,16 @@ class LunarServerRepo(
                     val responseData = Json.decodeFromString<LoginResponseDto>(response.body())
                     token = responseData.token
                 }
+
                 HttpStatusCode.Unauthorized.value -> {
                     val errorData = Json.decodeFromString<ErrorDto>(response.body())
                 }
+
                 else -> {
                     return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
                 }
             }
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
             Log.d("RemoteServerRepo", e.message.toString())
             currentCoroutineContext().ensureActive()
             return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
@@ -83,292 +80,147 @@ class LunarServerRepo(
         return LunarResult.Success(Unit)
     }
 
-    override suspend fun getMounts(): FileSystemResult<Mounts> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/mounts") {
-                method = HttpMethod.Get
-                bearerAuth(token = token)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    val responseData = Json.decodeFromString<MountsDto>(response.body())
-                    return LunarResult.Success(responseData.map())
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
-                }
-            }
+    private suspend inline fun <reified Dto, reified Response> getResponse(
+        response: HttpResponse,
+        onSuccess: (Dto) -> Response
+    ): FileSystemResult<Response> {
+        if (response.status.value == HttpStatusCode.Unauthorized.value) {
+            return LunarResult.Error(FileSystemErrors.UNAUTHORISED)
         }
-        catch (e: Exception) {
-            Log.d("RemoteServerRepo", e.message.toString())
-            currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        if (response.status.value != HttpStatusCode.OK.value) {
+            val errorData = Json.decodeFromString<ErrorDto>(response.body())
+            return LunarResult.Error(getErrorResults(errorData))
         }
+        val data = Json.decodeFromString<Dto>(response.body())
+        return LunarResult.Success(onSuccess(data))
+
     }
 
-    override suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/metadata") {
-                method = HttpMethod.Get
+    private suspend inline fun <reified Dto, reified Response> makeRequest(
+        url: String,
+        method: HttpMethod,
+        parameters: Map<String, String> = emptyMap(),
+        onSuccess: (Dto) -> Response
+    ): FileSystemResult<Response> {
+        return try {
+            val response = client.request(url) {
+                this.method = method
                 bearerAuth(token = token)
-                parameter("path", path)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    val responseData = Json.decodeFromString<MetaDataDto>(response.body())
-                    return LunarResult.Success(responseData.map())
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                parameters.forEach { (key, value) ->
+                    parameter(key, value)
                 }
             }
-        }
-        catch (e: Exception) {
+            getResponse<Dto, Response>(response, onSuccess)
+        } catch (e: SerializationException) {
+            LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
+        }catch (e: JsonConvertException) {
+            LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
+        } catch (e: HttpRequestTimeoutException) {
+            LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+        } catch (e: Exception) {
             Log.d("RemoteServerRepo", e.message.toString())
             currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+            LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
         }
     }
-
-    override suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/get_folder_content") {
-                method = HttpMethod.Get
-                bearerAuth(token = token)
-                parameter("path", path)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    val responseData = Json.decodeFromString<FolderContentDto>(response.body())
-                    return LunarResult.Success(responseData.map())
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
-                }
-            }
-        }
-        catch (e: Exception) {
-            Log.d("RemoteServerRepo", e.message.toString())
-            currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
-        }
-    }
-
-    override suspend fun createFile(path: String): FileSystemResult<LunarMetaData> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/touch") {
-                method = HttpMethod.Post
-                bearerAuth(token = token)
-                parameter("path", path)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    val responseData = Json.decodeFromString<MetaDataDto>(response.body())
-                    return LunarResult.Success(responseData.map())
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
-                }
-            }
-        }
-        catch (e: Exception) {
-            Log.d("RemoteServerRepo", e.message.toString())
-            currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
-        }
-    }
-
-    override suspend fun createFolder(path: String): FileSystemResult<LunarMetaData> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/mkdir") {
-                method = HttpMethod.Post
-                bearerAuth(token = token)
-                parameter("path", path)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    val responseData = Json.decodeFromString<MetaDataDto>(response.body())
-                    return LunarResult.Success(responseData.map())
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
-                }
-            }
-        }
-        catch (e: Exception) {
-            Log.d("RemoteServerRepo", e.message.toString())
-            currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
-        }
-    }
-
-    override suspend fun delete(
-        path: String,
-        permanently: Boolean
+    private suspend fun requestNoBody(
+        url: String,
+        method: HttpMethod,
+        parameters: Map<String, Any?> = emptyMap()
     ): FileSystemResult<Unit> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/delete") {
-                method = HttpMethod.Delete
+        return try {
+            val response = client.request(url) {
+                this.method = method
                 bearerAuth(token = token)
-                parameter("path", path)
-                parameter("permanent", permanently)
+                parameters.forEach { (k, v) -> parameter(k, v) }
             }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    return LunarResult.Success(Unit)
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
-                }
-            }
-        }
-        catch (e: Exception) {
-            Log.d("RemoteServerRepo", e.message.toString())
-            currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
-        }
-    }
 
-    override suspend fun rename(
-        path: String,
-        newPath: String,
-        shouldOverride: Boolean
-    ): FileSystemResult<Unit> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/rename") {
-                method = HttpMethod.Patch
-                bearerAuth(token = token)
-                parameter("path", path)
-                parameter("new_path", newPath)
-                parameter("should_overwrite", shouldOverride)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    return LunarResult.Success(Unit)
-                }
-                HttpStatusCode.Unauthorized.value -> {
+            when (response.status) {
+                HttpStatusCode.OK -> LunarResult.Success(Unit)
+                HttpStatusCode.Unauthorized -> {
                     Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
+                    LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
                 }
                 else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+                    val err = Json.decodeFromString<ErrorDto>(response.body())
+                    Log.d("RemoteServerRepo", err.message)
+                    LunarResult.Error(getErrorResults(err))
                 }
             }
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
             Log.d("RemoteServerRepo", e.message.toString())
             currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
-        }
-    }
-
-    override suspend fun copy(
-        path: String,
-        newPath: String,
-        shouldOverride: Boolean
-    ): FileSystemResult<Unit> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/copy") {
-                method = HttpMethod.Post
-                bearerAuth(token = token)
-                parameter("path", path)
-                parameter("new_path", newPath)
-                parameter("should_overwrite", shouldOverride)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    return LunarResult.Success(Unit)
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
-                }
-            }
-        }
-        catch (e: Exception) {
-            Log.d("RemoteServerRepo", e.message.toString())
-            currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
+            LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
         }
     }
 
 
-    override suspend fun move(
-        path: String,
-        newPath: String,
-        shouldOverride: Boolean
-    ): FileSystemResult<Unit> {
-        try {
-            val response = client.request("$baseUrl/api/v1/fs/move") {
-                method = HttpMethod.Patch
-                bearerAuth(token = token)
-                parameter("path", path)
-                parameter("new_path", newPath)
-                parameter("should_overwrite", shouldOverride)
-            }
-            when (response.status.value) {
-                HttpStatusCode.OK.value -> {
-                    return LunarResult.Success(Unit)
-                }
-                HttpStatusCode.Unauthorized.value -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
-                    return LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
-                }
-                else -> {
-                    val errorResponse = Json.decodeFromString<ErrorDto>(response.body())
-                    Log.d("RemoteServerRepo", errorResponse.message)
-                    return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
-                }
-            }
-        }
-        catch (e: Exception) {
-            Log.d("RemoteServerRepo", e.message.toString())
-            currentCoroutineContext().ensureActive()
-            return LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
-        }
+    override suspend fun getMounts(): FileSystemResult<Mounts> = makeRequest<MountsDto, Mounts>(
+        url = "$baseUrl/api/v1/fs/mounts",
+        method = HttpMethod.Get
+    ) {
+        it.map()
     }
+
+    override suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData> =
+        makeRequest<MetaDataDto, LunarMetaData>(
+            url = "$baseUrl/api/v1/fs/metadata",
+            method = HttpMethod.Get,
+            parameters = mapOf("path" to path)
+        ) {
+            it.map()
+        }
+
+    override suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo> =
+        makeRequest<FolderContentDto, FolderInfo>(
+            url = "$baseUrl/api/v1/fs/get_folder_content",
+            method = HttpMethod.Get,
+            parameters = mapOf("path" to path)
+        ) {
+            it.map()
+        }
+
+
+    override suspend fun createFile(path: String): FileSystemResult<LunarMetaData> =
+        makeRequest<MetaDataDto, LunarMetaData>(
+            url = "$baseUrl/api/v1/fs/touch",
+            method = HttpMethod.Post,
+            parameters = mapOf("path" to path)
+        ) { dto -> dto.map() }
+
+    override suspend fun createFolder(path: String): FileSystemResult<LunarMetaData> =
+        makeRequest<MetaDataDto, LunarMetaData>(
+            url = "$baseUrl/api/v1/fs/mkdir",
+            method = HttpMethod.Post,
+            parameters = mapOf("path" to path)
+        ) { dto -> dto.map() }
+
+    override suspend fun delete(path: String, permanently: Boolean): FileSystemResult<Unit> =
+        requestNoBody(
+            url = "$baseUrl/api/v1/fs/delete",
+            method = HttpMethod.Delete,
+            parameters = mapOf("path" to path, "permanent" to permanently)
+        )
+
+    override suspend fun rename(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+        requestNoBody(
+            url = "$baseUrl/api/v1/fs/rename",
+            method = HttpMethod.Patch,
+            parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
+        )
+
+    override suspend fun copy(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+        requestNoBody(
+            url = "$baseUrl/api/v1/fs/copy",
+            method = HttpMethod.Post,
+            parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
+        )
+
+    override suspend fun move(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+        requestNoBody(
+            url = "$baseUrl/api/v1/fs/move",
+            method = HttpMethod.Patch,
+            parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
+        )
 }
 

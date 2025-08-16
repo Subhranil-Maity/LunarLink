@@ -42,7 +42,7 @@ class ExplorerViewModel : ViewModel() {
 
     val fs: FileSystemRepository = LunarServerRepo(
         client = get().get<HttpClient>(),
-        baseUrl = "http://192.168.54.178:8080",
+        baseUrl = "http://192.168.110.178:8080",
         userName = "power",
         pass = "power",
     )

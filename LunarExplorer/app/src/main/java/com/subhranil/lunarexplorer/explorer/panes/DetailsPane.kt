@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,17 +38,6 @@ fun DetailsPane(
         val scrollState = rememberScrollState()
         val lazyState = rememberLazyListState()
         if (!state.pathHistory.isEmpty()) {
-//            Column(
-//                modifier.verticalScroll(scrollState)
-//            ) {
-//                state.currentFolderContent.forEach {
-//                    LinearEntry(metaData = it) {
-//                        if (it.entryType == EntryType.DIRECTORY) {
-//                            onAction(ExplorerActions.GoToPath(it.absolutePath))
-//                        }
-//                    }
-//                }
-//            }
             LazyColumn(
                 modifier = Modifier,
                 state = lazyState,
@@ -65,6 +56,18 @@ fun DetailsPane(
                         onAction(ExplorerActions.OnLongPressed(it))
                     })
                 }
+            }
+        } else {
+            Row(
+                modifier = modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "Pick a location.",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSecondary
+                )
             }
         }
     }

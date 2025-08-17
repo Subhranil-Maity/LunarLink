@@ -1,4 +1,3 @@
-use std::process::Command;
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
 
@@ -10,7 +9,7 @@ pub struct PersonalDevice {
 }
 
 impl PersonalDevice {
-    pub fn new(device_name: &str, mac_address: &str, os_version: &str, os_type: &str) -> Self {
+    pub fn new(device_name: &str, os_version: &str, os_type: &str) -> Self {
         Self {
             device_name: device_name.to_string(),
             os_version: os_version.to_string(),

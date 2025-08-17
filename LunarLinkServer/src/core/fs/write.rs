@@ -1,8 +1,8 @@
+use crate::core::fs::metadata::get_metadata;
+use crate::core::lunar_error::LunarResult;
+use crate::core::types::LunarMetadata;
 use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
-use crate::core::fs::metadata::get_metadata;
-use crate::core::types::LunarMetadata;
-use crate::core::lunar_error::LunarResult;
 
 /// Asynchronously writes data to a file at the specified path.
 ///
@@ -44,7 +44,7 @@ use crate::core::lunar_error::LunarResult;
 pub async fn write_file(
     path: &PathBuf,
     data: &[u8],
-    should_override: bool
+    should_override: bool,
 ) -> LunarResult<LunarMetadata> {
     let exists = tokio::fs::metadata(path).await?.is_file();
     if exists && should_override == false {

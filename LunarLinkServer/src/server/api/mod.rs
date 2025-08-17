@@ -1,4 +1,3 @@
-use axum::response::IntoResponse;
 use axum::Router;
 pub mod auth;
 mod v_one;
@@ -8,10 +7,4 @@ pub fn api_handler() -> Router {
     Router::new()
         .nest("/v1", v_one_handler())
         .nest("/auth", auth::auth_handler())
-        
 }
-
-
-
-
-

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use crate::core::lunar_error::{LunarError, LunarResult};
+use std::path::PathBuf;
 
 /// Asynchronously copies a file or folder from the source path to the destination path.
 ///
@@ -34,11 +34,7 @@ use crate::core::lunar_error::{LunarError, LunarResult};
 /// # }
 /// ```
 
-pub async fn copy(
-    src: &PathBuf,
-    dst: &PathBuf,
-    overwrite: bool,
-) -> LunarResult<()> {
+pub async fn copy(src: &PathBuf, dst: &PathBuf, overwrite: bool) -> LunarResult<()> {
     // Check if source exists
     if !tokio::fs::metadata(src).await.is_ok() {
         return Err(LunarError::FileOrFolderNotFound);
@@ -90,11 +86,7 @@ pub async fn copy(
 /// # }
 /// ```
 
-pub async fn move_file(
-    src: &PathBuf,
-    dst: &PathBuf,
-    overwrite: bool,
-) -> LunarResult<()> {
+pub async fn move_file(src: &PathBuf, dst: &PathBuf, overwrite: bool) -> LunarResult<()> {
     // Check if source exists
     if !tokio::fs::metadata(src).await.is_ok() {
         return Err(LunarError::FileOrFolderNotFound);
@@ -107,7 +99,7 @@ pub async fn move_file(
     // Attempt rename (move)
     match tokio::fs::rename(src, dst).await {
         Ok(_) => Ok(()),
-        Err(e) => {
+        Err(_) => {
             // On failure (e.g. cross-device rename), fallback to copy + delete
             tokio::fs::copy(src, dst).await?;
             tokio::fs::remove_file(src).await?;

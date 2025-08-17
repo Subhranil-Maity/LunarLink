@@ -1,8 +1,8 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-pub mod lunar_error;
 pub mod fs;
+pub mod lunar_error;
 pub mod types;
 
 fn to_absolute_path<P: AsRef<Path>>(path: P) -> std::io::Result<PathBuf> {

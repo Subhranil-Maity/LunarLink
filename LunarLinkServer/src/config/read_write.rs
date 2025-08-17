@@ -1,6 +1,5 @@
-use std::io::Error;
-use std::path::PathBuf;
 use crate::config::LunarConfig;
+use std::io::Error;
 
 pub fn load_config(path: &str) -> Result<LunarConfig, Error> {
     println!("WARNING: THE PASSWORD IS NOT ENCRYPTED, DO NOT USE IN PRODUCTION!");

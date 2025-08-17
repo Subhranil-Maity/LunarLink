@@ -1,6 +1,6 @@
-use std::collections::HashSet;
 use crate::config::UserPermissions;
 use crate::core::lunar_error::{LunarError, LunarResult};
+use std::collections::HashSet;
 
 pub fn have_enough_permissions(
     required_permissions: &UserPermissions,
@@ -12,7 +12,10 @@ pub fn have_enough_permissions(
 
     let user_perm_set: HashSet<_> = user_permissions.iter().collect();
 
-    if required_permissions.iter().all(|perm| user_perm_set.contains(perm)) {
+    if required_permissions
+        .iter()
+        .all(|perm| user_perm_set.contains(perm))
+    {
         Ok(())
     } else {
         Err(LunarError::PermissionDenied)

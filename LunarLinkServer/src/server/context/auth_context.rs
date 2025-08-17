@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::config::UserPermissions;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AuthContext {

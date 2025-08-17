@@ -1,11 +1,10 @@
-use std::fs::File;
-use std::io::ErrorKind;
 use lunar_lib::config::read_write::{load_config, save_default_config};
 use lunar_lib::server::run_server;
+use std::fs::File;
+use std::io::ErrorKind;
 
 #[tokio::main]
 async fn main() {
-
     match File::open("config.toml") {
         Ok(_) => {}
         Err(ref e) if e.kind() == ErrorKind::NotFound => {

@@ -1,11 +1,11 @@
-use std::fs;
-use std::os::windows::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
-use tokio::fs::metadata;
 use crate::core::lunar_error::{LunarError, LunarResult};
 use crate::core::to_absolute_path;
 use crate::core::types::{EntryType, LunarMetadata};
+use std::fs;
+use std::os::windows::fs::MetadataExt;
+use std::path::PathBuf;
+use std::time::UNIX_EPOCH;
+use tokio::fs::metadata;
 
 /// Asynchronously retrieves metadata for the file or folder at the specified path.
 ///
@@ -36,10 +36,9 @@ use crate::core::types::{EntryType, LunarMetadata};
 /// # }
 /// ```
 
-pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata>{
+pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata> {
     let fs_metadata = metadata(path).await?;
     let is_symlink = fs_metadata.file_type().is_symlink();
-
 
     let absolute_path = to_absolute_path(path)?.to_string_lossy().to_string();
     let last_modified = fs_metadata
@@ -52,7 +51,7 @@ pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata>{
             Ok(link_data) => Some(String::from_utf8_lossy(&link_data).to_string()),
             Err(_) => None, // If reading symlink fails, we just return None
         }
-    }else {
+    } else {
         None
     };
     let entry_type = if is_symlink {
@@ -64,12 +63,13 @@ pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata>{
     } else {
         EntryType::Other
     };
-    let size = if entry_type == EntryType::File{
+    let size = if entry_type == EntryType::File {
         fs_metadata.file_size()
-    }else {
+    } else {
         0
     };
-    let file_name = path.file_name()
+    let file_name = path
+        .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("unknown")
         .to_string();

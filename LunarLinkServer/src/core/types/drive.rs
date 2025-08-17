@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sysinfo::{DiskKind, Disks, System};
+use sysinfo::{DiskKind, Disks};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Drive {
@@ -19,7 +19,7 @@ pub enum DriveType {
     SSD,
     NVME,
     REMOVABLE,
-    UNKNOWN
+    UNKNOWN,
 }
 
 impl Drive {
@@ -29,30 +29,41 @@ impl Drive {
         total_size: usize,
         disk_type: DriveType,
         mount_point: String,
-        fs_type: String
+        fs_type: String,
     ) -> Self {
-        Self { name, used_size, total_size, disk_type, mount_point, fs_type }
+        Self {
+            name,
+            used_size,
+            total_size,
+            disk_type,
+            mount_point,
+            fs_type,
+        }
     }
 }
 
 pub fn get_drives() -> Drives {
     let disk = Disks::new_with_refreshed_list();
-    return disk.iter().map(|d| {
-        let disk_type = if d.is_removable() { DriveType::REMOVABLE }
-        else {
-            match d.kind() {
-                DiskKind::HDD => {DriveType::HDD}
-                DiskKind::SSD => {DriveType::SSD}
-                DiskKind::Unknown(_) => {DriveType::UNKNOWN}
-            }
-        };
-        Drive::new(
-            d.name().to_string_lossy().into_owned(),
-            (d.total_space() - d.available_space()) as usize,
-            d.total_space() as usize,
-            disk_type,
-            d.mount_point().to_string_lossy().into_owned(),
-            d.file_system().to_string_lossy().into_owned()
-        )
-    }).collect();
+    return disk
+        .iter()
+        .map(|d| {
+            let disk_type = if d.is_removable() {
+                DriveType::REMOVABLE
+            } else {
+                match d.kind() {
+                    DiskKind::HDD => DriveType::HDD,
+                    DiskKind::SSD => DriveType::SSD,
+                    DiskKind::Unknown(_) => DriveType::UNKNOWN,
+                }
+            };
+            Drive::new(
+                d.name().to_string_lossy().into_owned(),
+                (d.total_space() - d.available_space()) as usize,
+                d.total_space() as usize,
+                disk_type,
+                d.mount_point().to_string_lossy().into_owned(),
+                d.file_system().to_string_lossy().into_owned(),
+            )
+        })
+        .collect();
 }

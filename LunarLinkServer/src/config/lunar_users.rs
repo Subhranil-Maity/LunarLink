@@ -1,4 +1,3 @@
-use std::fs::Permissions;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -24,12 +23,16 @@ pub enum UserPermission {
 
 impl Default for LunarUsersConfig {
     fn default() -> Self {
-        let power_default_user = LunarUser{
+        let power_default_user = LunarUser {
             username: "power".to_string(),
             password: "power".to_string(),
-            permissions: vec![UserPermission::Read, UserPermission::Write, UserPermission::Delete],
+            permissions: vec![
+                UserPermission::Read,
+                UserPermission::Write,
+                UserPermission::Delete,
+            ],
         };
-        let default_user = LunarUser{
+        let default_user = LunarUser {
             username: "default".to_string(),
             password: "default".to_string(),
             permissions: vec![],

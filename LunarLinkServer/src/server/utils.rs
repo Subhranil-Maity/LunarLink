@@ -1,15 +1,13 @@
-use std::env;
+use crate::core::lunar_error::LunarError;
 use axum::extract::multipart::MultipartError;
 use axum::http::StatusCode;
-use axum::Json;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use rand::distr::Alphanumeric;
 use rand::Rng;
 use regex::Regex;
 use serde::Serialize;
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt;
-use crate::core::lunar_error::{LunarError, LunarResult};
+use std::env;
 
 pub fn error_to_code_and_message(err: &LunarError) -> (u64, &'static str) {
     match err {
@@ -59,12 +57,18 @@ impl IntoResponse for LunarError {
 
         // Map certain errors to specific HTTP status codes
         let status = match self {
-            LunarError::Unauthorized | LunarError::MissingAuthHeader | LunarError::InvalidAuthHeader | LunarError::JwtError(_) | LunarError::LoginFail => {
-                StatusCode::UNAUTHORIZED
+            LunarError::Unauthorized
+            | LunarError::MissingAuthHeader
+            | LunarError::InvalidAuthHeader
+            | LunarError::JwtError(_)
+            | LunarError::LoginFail => StatusCode::UNAUTHORIZED,
+            LunarError::PermissionDenied | LunarError::AccessDeniedBySystem => {
+                StatusCode::FORBIDDEN
             }
-            LunarError::PermissionDenied | LunarError::AccessDeniedBySystem => StatusCode::FORBIDDEN,
             LunarError::FileOrFolderNotFound => StatusCode::NOT_FOUND,
-            LunarError::BadRequest | LunarError::InvalidData | LunarError::ParseError => StatusCode::BAD_REQUEST,
+            LunarError::BadRequest | LunarError::InvalidData | LunarError::ParseError => {
+                StatusCode::BAD_REQUEST
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -80,41 +84,10 @@ pub fn generate_random_string(len: usize) -> String {
         .collect()
 }
 
-impl From<MultipartError> for LunarError{
+impl From<MultipartError> for LunarError {
     fn from(value: MultipartError) -> Self {
         LunarError::BadRequest
     }
-}
-
-pub async fn is_upload_complete(temp_dir: &str, total_chunks: usize) -> bool {
-    let mut read = match tokio::fs::read_dir(temp_dir).await{
-        Ok(entries) => entries,
-        Err(_) => return false,
-    };
-    let mut count = 0;
-    while let Some(entry) = read.next_entry().await.unwrap() {
-        if entry.file_name().to_str().unwrap().starts_with("chunk_") {
-            count += 1;
-        }
-    }
-    return count == total_chunks;
-}
-
-pub async fn assemble_file(temp_dir: &str, file_name: &str, total_chunks: usize) -> LunarResult<()> {
-    let output_path = format!("./uploads/{}", file_name);
-    let mut output_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(&output_path).await?;
-
-    for chunk_number in 0..total_chunks {
-        let chunk_path = format!("{}/chunk_{}", temp_dir, chunk_number);
-        let chunk_data = tokio::fs::read(&chunk_path).await?;
-        output_file.write_all(&chunk_data).await?;
-    }
-
-    tokio::fs::remove_dir_all(temp_dir).await?;
-    Ok(())
 }
 
 pub fn expand_env_vars(path: &str) -> String {
@@ -124,6 +97,6 @@ pub fn expand_env_vars(path: &str) -> String {
     re.replace_all(path, |caps: &regex::Captures| {
         let var_name = &caps[1];
         env::var(var_name).unwrap_or_else(|_| caps[0].to_string())
-    }).into_owned()
+    })
+    .into_owned()
 }
-

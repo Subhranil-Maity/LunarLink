@@ -3,7 +3,6 @@ use crate::core::lunar_error::LunarResult;
 use crate::core::types::{FileData, FolderData};
 use std::path::PathBuf;
 
-
 /// Asynchronously reads the contents of a file at the specified path and retrieves its metadata.
 ///
 /// # Arguments
@@ -35,17 +34,16 @@ use std::path::PathBuf;
 /// # }
 /// ```
 
-pub async fn read_file(path: &PathBuf) -> LunarResult<FileData>{
+pub async fn read_file(path: &PathBuf) -> LunarResult<FileData> {
     let data = read_file_bytes(path).await?;
     let metadata = get_metadata(path).await?;
-    Ok(FileData{metadata, data})
+    Ok(FileData { metadata, data })
 }
 
 pub async fn read_file_bytes(path: &PathBuf) -> LunarResult<Vec<u8>> {
     let data = tokio::fs::read(path).await?;
     Ok(data)
 }
-
 
 /// Asynchronously reads the contents of a folder at the specified path and retrieves metadata for the folder and its entries.
 ///
@@ -78,17 +76,14 @@ pub async fn read_file_bytes(path: &PathBuf) -> LunarResult<Vec<u8>> {
 /// # }
 /// ```
 
-pub async fn read_folder(path: &PathBuf) -> LunarResult<FolderData>{
+pub async fn read_folder(path: &PathBuf) -> LunarResult<FolderData> {
     let mut entries = Vec::new();
     let mut dir = tokio::fs::read_dir(path).await?;
     while let Some(entry) = dir.next_entry().await? {
         entries.push(get_metadata(&entry.path()).await?);
     }
     let metadata = get_metadata(path).await?;
-    let folder_data = FolderData{
-        metadata,
-        entries,
-    };
+    let folder_data = FolderData { metadata, entries };
 
     Ok(folder_data)
 }

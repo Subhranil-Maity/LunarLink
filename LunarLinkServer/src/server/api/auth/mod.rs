@@ -1,6 +1,6 @@
 use axum::http::Method;
+use axum::routing::post;
 use axum::Router;
-use axum::routing::{get, post};
 use tower_http::cors::{Any, CorsLayer};
 
 mod auth_login;

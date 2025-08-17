@@ -1,10 +1,10 @@
-use axum::Router;
 use axum::routing::{delete, get, patch, post};
+use axum::Router;
 
-mod mounts;
-mod metadata;
-mod folder;
 mod file;
+mod folder;
+mod metadata;
+mod mounts;
 
 pub fn fs_handler() -> Router {
     println!("WRITE FUNCTIONALITY IS EXPERIMENTAL MOSTLY");
@@ -21,5 +21,5 @@ pub fn fs_handler() -> Router {
         .route("/delete", delete(file::delete_delete))
         .route("/touch", post(file::post_touch))
         .route("/mkdir", post(folder::post_mkdir))
-        // .route("/write_chunked_file", post(file::post_upload_chunk))
+    // .route("/write_chunked_file", post(file::post_upload_chunk))
 }

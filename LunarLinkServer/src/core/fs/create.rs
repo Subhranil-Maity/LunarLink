@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use crate::core::lunar_error::LunarResult;
 use crate::core::types::LunarMetadata;
+use std::path::PathBuf;
 
 /// Asynchronously creates a file at the specified path if it does not exist,
 /// or updates its last modified time if it does.
@@ -33,7 +33,7 @@ use crate::core::types::LunarMetadata;
 /// # }
 /// ```
 
-pub async fn touch(path: &PathBuf) -> LunarResult<LunarMetadata>{
+pub async fn touch(path: &PathBuf) -> LunarResult<LunarMetadata> {
     // Create the file if it doesn't exist, or update its last modified time
     tokio::fs::OpenOptions::new()
         .create(true)
@@ -46,7 +46,6 @@ pub async fn touch(path: &PathBuf) -> LunarResult<LunarMetadata>{
 
     Ok(metadata)
 }
-
 
 /// Asynchronously creates a directory and all of its parent components if they do not exist.
 ///

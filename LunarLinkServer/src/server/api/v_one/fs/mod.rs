@@ -14,7 +14,7 @@ pub fn fs_handler() -> Router {
         .route("/metadata", get(metadata::get_metadata))
         .route("/get_folder_content", get(folder::get_ls))
         .route("/read_full_file", get(file::get_read_full_file))
-        .route("/read_chunked_file", get(file::get_chunked_file))
+        .route("/download_file", get(file::get_chunked_file))
         .route("/rename", patch(file::patch_rename_file))
         .route("/move", patch(file::patch_move_file))
         .route("/copy", post(file::post_copy))

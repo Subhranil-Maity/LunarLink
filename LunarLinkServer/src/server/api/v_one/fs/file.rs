@@ -10,8 +10,11 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use http::StatusCode;
 use serde::Deserialize;
-use std::io::SeekFrom;
+use std::io::{ErrorKind, SeekFrom};
 use std::path::{absolute, PathBuf};
+use axum_extra::headers::Range;
+use axum_extra::TypedHeader;
+use axum_range::{KnownSize, Ranged};
 use tokio::fs::{create_dir_all, File};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tracing::{trace, Metadata};
@@ -30,34 +33,32 @@ pub async fn get_read_full_file(
     let file_data = crate::core::fs::read_file(&path_buff).await?;
     Ok(Json(file_data))
 }
-#[derive(Deserialize)]
-pub struct CustomQueryParams {
-    pub path: String,
-    pub offset: u64,
-    pub chunk_size: usize,
-}
 
 pub async fn get_chunked_file(
-    Query(params): Query<CustomQueryParams>,
+    Query(params): Query<QueryParams>,
+    range: Option<TypedHeader<Range>>,
     Extension(auth_context): Extension<AuthContext>,
-) -> LunarResult<Response> {
+) -> LunarResult<Ranged<KnownSize<File>>> {
     have_enough_permissions(&vec![UserPermission::Read], &auth_context.permissions)?;
-    let file_path = params.path;
-    let mut file = File::open(&file_path).await?;
-    let mut buffer = vec![0; params.chunk_size];
-    file.seek(SeekFrom::Start(params.offset)).await?;
-    let bytes_read = file.read(&mut buffer).await?;
-
-    if bytes_read == 0 {
-        return Ok(StatusCode::NO_CONTENT.into_response());
-    }
-
-    let body = Body::from(buffer[..bytes_read].to_vec());
-    let response = Response::builder()
-        .header("Content-Type", "application/octet-stream")
-        .body(body)
-        .map_err(|e| LunarError::KnownUnknownError(e.to_string()))?;
-    Ok(response)
+    let path = PathBuf::from(params.get_path()?);
+    // Open file
+    let file = match File::open(&path).await {
+        Ok(f) => f,
+        Err(e) => return match e.kind() {
+            ErrorKind::NotFound => {
+                Err(LunarError::FileOrFolderNotFound)
+            }
+            ErrorKind::PermissionDenied => {
+                Err(LunarError::PermissionDenied)
+            }
+            _ => {
+                Err(LunarError::FailedToReadFile)
+            }
+        },
+    };
+    let body = KnownSize::file(file).await?;
+    let range = range.map(|TypedHeader(range)| range);
+    Ok(Ranged::new(range, body))
 }
 
 

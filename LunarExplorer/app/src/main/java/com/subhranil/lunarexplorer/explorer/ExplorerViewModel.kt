@@ -41,10 +41,10 @@ class ExplorerViewModel : ViewModel() {
     val state = _state.asStateFlow()
     var pendingNameRequest by mutableStateOf<PendingNameRequest?>(null)
         private set
-
+    private var exitScreenCallback: () -> Unit = {}
     val fs: FileSystemRepository = LunarServerRepo(
         client = get().get<HttpClient>(),
-        baseUrl = "http://192.168.110.178:8080",
+        baseUrl = "http://192.168.124.178:8080",
         userName = "power",
         pass = "power",
     )
@@ -95,6 +95,9 @@ class ExplorerViewModel : ViewModel() {
                 )
             }
         }
+    }
+    fun setExitCallBack(callback: () -> Unit) {
+        exitScreenCallback = callback
     }
 
     fun onAction(action: ExplorerActions) {
@@ -585,6 +588,8 @@ class ExplorerViewModel : ViewModel() {
                 )
             }
             onRefresh()
+        }else{
+            exitScreenCallback()
         }
     }
 

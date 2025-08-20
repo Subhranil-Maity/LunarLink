@@ -51,6 +51,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material3.window.size.class1)
+    implementation(libs.lifecycle.viewmodel.navigation3)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -66,7 +67,7 @@ dependencies {
     implementation(libs.bundles.ktor)
 
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.bundles.camera)
+//    implementation(libs.bundles.camera)
 
     implementation(libs.androidx.datastore.preferences)
 
@@ -75,7 +76,11 @@ dependencies {
     implementation("androidx.compose.material3.adaptive:adaptive-navigation")
 
 //    implementation("io.ktor:ktor-client-logging:3.2.3")
-
+;
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 
 
 }

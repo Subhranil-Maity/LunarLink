@@ -3,9 +3,12 @@ package com.subhranil.lunarexplorer.lunarlink
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import com.subhranil.lunarexplorer.home.models.LunarHost
+import com.subhranil.lunarexplorer.home.models.LunarHostConnectionConfig
 import com.subhranil.lunarexplorer.lunarlink.dto.ErrorDto
 import com.subhranil.lunarexplorer.lunarlink.dto.FileData
 import com.subhranil.lunarexplorer.lunarlink.dto.FolderContentDto
+import com.subhranil.lunarexplorer.lunarlink.dto.InfoDto
 import com.subhranil.lunarexplorer.lunarlink.dto.LoginRequestDto
 import com.subhranil.lunarexplorer.lunarlink.dto.LoginResponseDto
 import com.subhranil.lunarexplorer.lunarlink.dto.MetaDataDto
@@ -37,7 +40,25 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import org.koin.compose.koinInject
 import org.koin.core.context.GlobalContext.get
+
+
+suspend fun isLunarHostAlive(
+    host: LunarHostConnectionConfig,
+    client: HttpClient
+): LunarHost? {
+    return try {
+        val response = client.request("${host.host}/api/get_info"){
+            method = HttpMethod.Get
+        }
+        val data = Json.decodeFromString<InfoDto>(response.body())
+        data.map(host)
+    } catch (e: Exception) {
+        currentCoroutineContext().ensureActive()
+        null
+    }
+}
 
 
 class LunarServerRepo(
@@ -114,12 +135,15 @@ class LunarServerRepo(
             }
             getResponse<Dto, Response>(response, onSuccess)
         } catch (e: SerializationException) {
+            currentCoroutineContext().ensureActive()
             Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
         }catch (e: JsonConvertException) {
+            currentCoroutineContext().ensureActive()
             Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
         } catch (e: HttpRequestTimeoutException) {
+            currentCoroutineContext().ensureActive()
             Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.CANNOT_CONNECT)
         } catch (e: Exception) {

@@ -25,6 +25,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.subhranil.lunarexplorer.formatInstant
 import com.subhranil.lunarexplorer.icons.getIcon
 import com.subhranil.lunarexplorer.models.EntryType
 import com.subhranil.lunarexplorer.models.LunarMetaData
@@ -115,26 +116,6 @@ fun LinearEntry(
     }
 }
 
-
-
-@OptIn(ExperimentalTime::class)
-@Composable
-fun formatInstant(instant: Instant): Pair<String, String> {
-    val dateFormatter = remember {
-        DateTimeFormatter.ofPattern("yyyy-MM-dd")
-            .withZone(ZoneId.systemDefault())
-    }
-    val timeFormatter = remember {
-        DateTimeFormatter.ofPattern("HH:mm")
-            .withZone(ZoneId.systemDefault())
-    }
-
-    val javaInstant = instant.toJavaInstant()
-    val dateStr = dateFormatter.format(javaInstant)
-    val timeStr = timeFormatter.format(javaInstant)
-
-    return dateStr to timeStr
-}
 
 
 fun bytesToHumanReadable(bytes: Long): String {

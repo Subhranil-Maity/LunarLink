@@ -57,10 +57,14 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun ExplorerScreen(
     modifier: Modifier = Modifier,
-    viewModel: ExplorerViewModel = koinViewModel()
+    viewModel: ExplorerViewModel = koinViewModel(),
+    onExitExplorer: () -> Unit
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val onAction = viewModel::onAction
+    viewModel.setExitCallBack {
+        onExitExplorer()
+    }
     state.error?.let { error ->
         Column(
             modifier = modifier
@@ -94,7 +98,7 @@ fun ExplorerScreen(
         return
     }
 
-    val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+//    val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -116,7 +120,8 @@ fun ExplorerScreen(
             }
             else -> {
                 // "super" call — let system handle back normally
-                dispatcher?.onBackPressed()
+//                dispatcher?.onBackPressed()
+                onExitExplorer()
             }
         }
     }

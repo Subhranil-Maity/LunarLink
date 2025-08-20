@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.subhranil.lunarexplorer.formatInstant
 import com.subhranil.lunarexplorer.models.Drive
 import com.subhranil.lunarexplorer.models.LunarMetaData
 import kotlin.time.ExperimentalTime

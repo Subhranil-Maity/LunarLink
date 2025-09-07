@@ -2,6 +2,8 @@ package com.subhranil.lunarexplorer.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.subhranil.lunarexplorer.ExplorerConfig
+import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.home.models.LunarDeviceType
 import com.subhranil.lunarexplorer.home.models.LunarHost
 import com.subhranil.lunarexplorer.home.models.LunarHostConnectionConfig
@@ -22,7 +24,8 @@ import kotlin.time.Instant
 
 class HomeViewModel(
     val storage: HomeStorage,
-    val client: HttpClient
+    val client: HttpClient,
+    val globalStateHandler: GlobalStateHandler
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state = _state.asStateFlow()
@@ -88,7 +91,11 @@ class HomeViewModel(
     }
 
     private fun onSelectServer(host: LunarHost) {
-
+        globalStateHandler.config = ExplorerConfig(
+            host = host.host,
+            username = host.username,
+            password = host.password
+        )
     }
 
     private fun onDismissAddNewServerDialog() {
@@ -116,6 +123,14 @@ class HomeViewModel(
                 _state.update {st ->
                     st.copy(listOfActiveLunarHosts = list)
                 }
+                storage.saveLunarHosts(list.map { host ->
+                    LunarHostConnectionConfig(
+                        host = host.host,
+                        username = host.username,
+                        password = host.password,
+                        lastConnected = System.currentTimeMillis() / 1000
+                    )
+                })
             }
         }
     }

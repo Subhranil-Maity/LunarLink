@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.explorer.clipboard.NameConflictRequest
 import com.subhranil.lunarexplorer.explorer.message.SnackbarMessage
 import com.subhranil.lunarexplorer.explorer.options.ExplorerOptionType
@@ -36,15 +37,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext.get
 
-class ExplorerViewModel : ViewModel() {
+class ExplorerViewModel(
+    val globalStateHandler: GlobalStateHandler
+) : ViewModel() {
     private val _state = MutableStateFlow(ExplorerState())
     val state = _state.asStateFlow()
     var pendingNameRequest by mutableStateOf<PendingNameRequest?>(null)
         private set
     private var exitScreenCallback: () -> Unit = {}
-    val fs: FileSystemRepository = LunarServerRepo(
+    var fs: FileSystemRepository = LunarServerRepo(
         client = get().get<HttpClient>(),
-        baseUrl = "http://192.168.124.178:8080",
+        baseUrl = "http://192.168.47.178:8080",
         userName = "power",
         pass = "power",
     )
@@ -56,6 +59,17 @@ class ExplorerViewModel : ViewModel() {
                     isConnected = false
                 )
             }
+            if (globalStateHandler.config == null){
+                throw Exception("Unhandled")
+                // TODO: Handle this
+            }
+            val handle = globalStateHandler.config!!
+            fs = LunarServerRepo(
+                client = get().get<HttpClient>(),
+                baseUrl = handle.host,
+                userName = handle.username,
+                pass = handle.password
+            )
             val connect = fs.connect()
             when (connect) {
                 is LunarResult.Error<Unit, FileSystemErrors> -> {

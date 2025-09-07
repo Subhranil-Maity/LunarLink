@@ -76,6 +76,7 @@ fun HomeScreen(
                         host = server
                     ) {
                         onAction(HomeActions.OnSelectServer(server))
+                        onChangeBackStack(NavDestinations.ExplorerScreenDestination)
                     }
                 }
                 item {
@@ -89,12 +90,6 @@ fun HomeScreen(
             Spacer(Modifier.height(20.dp))
             Text("Downloads", style = MaterialTheme.typography.titleLarge)
             Text("No Downloads", style = MaterialTheme.typography.bodyMedium)
-            Button(
-                onClick = {
-                    onChangeBackStack(NavDestinations.ExplorerScreenDestination)
-                }
-            ) { Text("Explorer")}
-
         }
     }
 

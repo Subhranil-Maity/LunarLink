@@ -22,7 +22,6 @@ import com.subhranil.lunarexplorer.explorer.ExplorerScreen
 import com.subhranil.lunarexplorer.home.HomeScreen
 import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
 import com.subhranil.lunarexplorer.navigation.RootNavigation
-import com.subhranil.lunarexplorer.repository.FileSystemRepository
 import com.subhranil.lunarexplorer.settings.SettingsUi
 import com.subhranil.lunarexplorer.ui.theme.LunarExplorerTheme
 import io.ktor.client.HttpClient

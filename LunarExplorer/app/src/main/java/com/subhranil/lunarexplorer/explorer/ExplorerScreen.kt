@@ -1,5 +1,6 @@
 package com.subhranil.lunarexplorer.explorer
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
@@ -29,6 +30,7 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,8 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.explorer.actions.ExplorerTopAppBar
 import com.subhranil.lunarexplorer.explorer.adaptative.AdaptativeExplorer
 import com.subhranil.lunarexplorer.explorer.clipboard.ClipboardFab
@@ -49,8 +53,10 @@ import com.subhranil.lunarexplorer.explorer.options.OptionPage
 import com.subhranil.lunarexplorer.explorer.options.getExplorerOptions
 import com.subhranil.lunarexplorer.explorer.panes.DetailsPane
 import com.subhranil.lunarexplorer.explorer.panes.ExplorerSideBar
+import com.subhranil.lunarexplorer.services.ConnectionManagerService
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -58,8 +64,19 @@ import org.koin.androidx.compose.koinViewModel
 fun ExplorerScreen(
     modifier: Modifier = Modifier,
     viewModel: ExplorerViewModel = koinViewModel(),
+    globalStateHandler: GlobalStateHandler = koinInject(),
     onExitExplorer: () -> Unit
 ) {
+//    val conn by globalStateHandler.connection.collectAsState()
+//    val context = LocalContext.current
+//    if (conn == null) {
+//        Toast.makeText(
+//            context,
+//            "Connection is null, going back",
+//            Toast.LENGTH_SHORT
+//        ).show()
+//        onExitExplorer()
+//    }
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val onAction = viewModel::onAction
     viewModel.setExitCallBack {
@@ -112,12 +129,15 @@ fun ExplorerScreen(
             state.showSearch -> {
                 onAction(ExplorerActions.OnSearchDisMissed)
             }
+
             state.showOptions != null -> {
                 onAction(ExplorerActions.OnOptionsDismiss)
             }
+
             state.pathHistory.isNotEmpty() -> {
                 onAction(ExplorerActions.OnBackPressed)
             }
+
             else -> {
                 // "super" call — let system handle back normally
 //                dispatcher?.onBackPressed()

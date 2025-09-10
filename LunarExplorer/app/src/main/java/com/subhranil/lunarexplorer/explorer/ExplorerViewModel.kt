@@ -3,11 +3,13 @@ package com.subhranil.lunarexplorer.explorer
 import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.explorer.clipboard.NameConflictRequest
@@ -26,31 +28,37 @@ import com.subhranil.lunarexplorer.models.FolderInfo
 import com.subhranil.lunarexplorer.models.LunarMetaData
 import com.subhranil.lunarexplorer.models.Mounts
 import com.subhranil.lunarexplorer.models.isDir
-import com.subhranil.lunarexplorer.repository.FileSystemRepository
 import com.subhranil.lunarexplorer.result.FileSystemErrors
 import com.subhranil.lunarexplorer.result.LunarResult
 import com.subhranil.lunarexplorer.result.RootError
+import com.subhranil.lunarexplorer.services.ConnectionManagerService
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext.get
+import kotlin.jvm.Throws
+
+
 
 class ExplorerViewModel(
-    val globalStateHandler: GlobalStateHandler
+//    private val getConnectionManagerService: () -> ConnectionManagerService
+    private val globalStateHandler: GlobalStateHandler,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ExplorerState())
     val state = _state.asStateFlow()
     var pendingNameRequest by mutableStateOf<PendingNameRequest?>(null)
         private set
     private var exitScreenCallback: () -> Unit = {}
-    var fs: FileSystemRepository = LunarServerRepo(
+    var fs = LunarServerRepo(
         client = get().get<HttpClient>(),
         baseUrl = "http://192.168.47.178:8080",
         userName = "power",
         pass = "power",
     )
+//    val fs : StateFlow<LunarServerRepo> = globalStateHandler.connection
 
     init {
         viewModelScope.launch {
@@ -59,17 +67,20 @@ class ExplorerViewModel(
                     isConnected = false
                 )
             }
-            if (globalStateHandler.config == null){
-                throw Exception("Unhandled")
-                // TODO: Handle this
+            viewModelScope.launch {
+                globalStateHandler.connection.collect { state ->
+                    if (state == null) {
+//                        Toast.makeText(get().get(), "Connection is null, going back", Toast.LENGTH_SHORT)
+//                            .show()
+                        exitScreenCallback()
+                        // handle immediately
+                    }
+                }
             }
-            val handle = globalStateHandler.config!!
-            fs = LunarServerRepo(
-                client = get().get<HttpClient>(),
-                baseUrl = handle.host,
-                userName = handle.username,
-                pass = handle.password
-            )
+//            require(globalStateHandler.connection.collectAsState() != null){
+//                "Empty Connection Found"
+//            }
+            fs = globalStateHandler.connection.value!!
             val connect = fs.connect()
             when (connect) {
                 is LunarResult.Error<Unit, FileSystemErrors> -> {

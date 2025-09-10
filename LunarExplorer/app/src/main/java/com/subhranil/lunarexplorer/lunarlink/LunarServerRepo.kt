@@ -18,7 +18,6 @@ import com.subhranil.lunarexplorer.lunarlink.dto.toByteArrayUnsigned
 import com.subhranil.lunarexplorer.models.FolderInfo
 import com.subhranil.lunarexplorer.models.LunarMetaData
 import com.subhranil.lunarexplorer.models.Mounts
-import com.subhranil.lunarexplorer.repository.FileSystemRepository
 import com.subhranil.lunarexplorer.result.FileSystemErrors
 import com.subhranil.lunarexplorer.result.FileSystemResult
 import com.subhranil.lunarexplorer.result.LunarResult
@@ -40,7 +39,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import org.koin.compose.koinInject
 import org.koin.core.context.GlobalContext.get
 
 
@@ -60,17 +58,21 @@ suspend fun isLunarHostAlive(
     }
 }
 
+enum class LunarConnectionState {
+    CONNECTED,
+    DISCONNECTED,
+    UNAUTHORISED
+}
 
 class LunarServerRepo(
     private val client: HttpClient,
     private val baseUrl: String,
     private val userName: String,
     private val pass: String,
-) : FileSystemRepository {
+) {
     private var token: String = ""
-
     @OptIn(InternalAPI::class)
-    override suspend fun connect(): FileSystemResult<Unit> {
+     suspend fun connect(): FileSystemResult<Unit> {
         try {
             val dto = LoginRequestDto(
                 username = this@LunarServerRepo.userName,
@@ -183,15 +185,22 @@ class LunarServerRepo(
         }
     }
 
+    fun currentConnectionState(): LunarConnectionState {
+        return if (token.isNotEmpty()) {
+            LunarConnectionState.CONNECTED
+        } else {
+            LunarConnectionState.DISCONNECTED
+        }
+    }
 
-    override suspend fun getMounts(): FileSystemResult<Mounts> = makeRequest<MountsDto, Mounts>(
+     suspend fun getMounts(): FileSystemResult<Mounts> = makeRequest<MountsDto, Mounts>(
         url = "$baseUrl/api/v1/fs/mounts",
         method = HttpMethod.Get
     ) {
         it.map()
     }
 
-    override suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData> =
+     suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData> =
         makeRequest<MetaDataDto, LunarMetaData>(
             url = "$baseUrl/api/v1/fs/metadata",
             method = HttpMethod.Get,
@@ -200,7 +209,7 @@ class LunarServerRepo(
             it.map()
         }
 
-    override suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo> =
+     suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo> =
         makeRequest<FolderContentDto, FolderInfo>(
             url = "$baseUrl/api/v1/fs/get_folder_content",
             method = HttpMethod.Get,
@@ -210,49 +219,49 @@ class LunarServerRepo(
         }
 
 
-    override suspend fun createFile(path: String): FileSystemResult<LunarMetaData> =
+     suspend fun createFile(path: String): FileSystemResult<LunarMetaData> =
         makeRequest<MetaDataDto, LunarMetaData>(
             url = "$baseUrl/api/v1/fs/touch",
             method = HttpMethod.Post,
             parameters = mapOf("path" to path)
         ) { dto -> dto.map() }
 
-    override suspend fun createFolder(path: String): FileSystemResult<LunarMetaData> =
+     suspend fun createFolder(path: String): FileSystemResult<LunarMetaData> =
         makeRequest<MetaDataDto, LunarMetaData>(
             url = "$baseUrl/api/v1/fs/mkdir",
             method = HttpMethod.Post,
             parameters = mapOf("path" to path)
         ) { dto -> dto.map() }
 
-    override suspend fun delete(path: String, permanently: Boolean): FileSystemResult<Unit> =
+     suspend fun delete(path: String, permanently: Boolean): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/delete",
             method = HttpMethod.Delete,
             parameters = mapOf("path" to path, "permanent" to permanently)
         )
 
-    override suspend fun rename(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+     suspend fun rename(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/rename",
             method = HttpMethod.Patch,
             parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
         )
 
-    override suspend fun copy(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+     suspend fun copy(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/copy",
             method = HttpMethod.Post,
             parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
         )
 
-    override suspend fun move(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+     suspend fun move(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/move",
             method = HttpMethod.Patch,
             parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
         )
 
-    override suspend fun getCompleteFile(path: String): FileSystemResult<ByteArray> =
+     suspend fun getCompleteFile(path: String): FileSystemResult<ByteArray> =
         makeRequest<FileData, ByteArray>(
             url = "$baseUrl/api/v1/fs/read_full_file",
             method = HttpMethod.Get,

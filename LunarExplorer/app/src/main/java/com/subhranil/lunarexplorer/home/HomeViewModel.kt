@@ -2,13 +2,14 @@ package com.subhranil.lunarexplorer.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.subhranil.lunarexplorer.ExplorerConfig
 import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.home.models.LunarDeviceType
 import com.subhranil.lunarexplorer.home.models.LunarHost
 import com.subhranil.lunarexplorer.home.models.LunarHostConnectionConfig
 import com.subhranil.lunarexplorer.home.store.HomeStorage
+import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
 import com.subhranil.lunarexplorer.lunarlink.isLunarHostAlive
+import com.subhranil.lunarexplorer.services.ConnectionManagerService
 import com.subhranil.lunarexplorer.settings.sub.DummySettingSettings
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext.get
+import java.lang.ref.WeakReference
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -77,7 +79,11 @@ class HomeViewModel(
         when (action) {
             is HomeActions.OnAddServer -> onAddServer(action.host, action.username, action.password)
             HomeActions.OnDismissAddNewServerDialog -> onDismissAddNewServerDialog()
-            is HomeActions.OnSelectServer -> onSelectServer(action.host)
+            is HomeActions.OnSelectServer -> onSelectServer(
+                action.host,
+                action.connectionManagerService
+            )
+
             HomeActions.OnShowAddNewServerDialog -> onShowAddNewServerDialog()
         }
     }
@@ -90,12 +96,23 @@ class HomeViewModel(
         }
     }
 
-    private fun onSelectServer(host: LunarHost) {
-        globalStateHandler.config = ExplorerConfig(
-            host = host.host,
-            username = host.username,
-            password = host.password
+    private fun onSelectServer(
+        host: LunarHost,
+        connectionManagerService: ConnectionManagerService
+    ) {
+        globalStateHandler.setConnection(
+            LunarServerRepo(
+                client = client,
+                baseUrl = host.host,
+                userName = host.username,
+                pass = host.password
+            )
         )
+//        globalStateHandler.config = ExplorerConfig(
+//            host = host.host,
+//            username = host.username,
+//            password = host.password
+//        )
     }
 
     private fun onDismissAddNewServerDialog() {
@@ -117,10 +134,10 @@ class HomeViewModel(
                 ),
                 client = get().get()
             )
-            server?.let{ it ->
+            server?.let { it ->
                 val list = _state.value.listOfActiveLunarHosts.toMutableList()
                 list.add(it)
-                _state.update {st ->
+                _state.update { st ->
                     st.copy(listOfActiveLunarHosts = list)
                 }
                 storage.saveLunarHosts(list.map { host ->

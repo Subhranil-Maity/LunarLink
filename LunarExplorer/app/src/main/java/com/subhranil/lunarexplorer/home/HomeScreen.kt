@@ -1,5 +1,6 @@
 package com.subhranil.lunarexplorer.home
 
+import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -21,15 +22,24 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.subhranil.lunarexplorer.home.component.LinearAddLunarServer
 import com.subhranil.lunarexplorer.home.component.LinearLunarServerConnect
 import com.subhranil.lunarexplorer.home.selectors.LunarServerSelector
+import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
 import com.subhranil.lunarexplorer.navigation.NavDestinations
+import com.subhranil.lunarexplorer.services.ConnectionManagerService
+import com.subhranil.lunarexplorer.services.rememberConnectionService
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
+import org.koin.core.context.GlobalContext.get
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,10 +47,12 @@ import org.koin.androidx.compose.koinViewModel
 fun HomeScreen(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = koinViewModel(),
+    connectionService: ConnectionManagerService?,
     onChangeBackStack: (NavDestinations) -> Unit
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val onAction = viewModel::onAction
+
     LunarServerSelector(
         shouldShow = state.showAddServerDialog,
         onAction = onAction
@@ -68,6 +80,7 @@ fun HomeScreen(
         Column(
             modifier = Modifier.padding(innerPadding)
         ) {
+            val scope = rememberCoroutineScope()
             LazyColumn(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -75,8 +88,13 @@ fun HomeScreen(
                     LinearLunarServerConnect(
                         host = server
                     ) {
-                        onAction(HomeActions.OnSelectServer(server))
-                        onChangeBackStack(NavDestinations.ExplorerScreenDestination)
+                        connectionService?.let { v ->
+                            onAction(HomeActions.OnSelectServer(server, v))
+                            v.updateNotificationToConnected(server.deviceName)
+                            onChangeBackStack(NavDestinations.ExplorerScreenDestination)
+                        }
+
+//                        connectionService?.updateNotification("Connecting", "Connecting to ${server.deviceName}")
                     }
                 }
                 item {

@@ -61,7 +61,7 @@ fun rememberConnectionService(): ConnectionManagerService? {
 // ---------------- ConnectionManagerService ----------------
 class ConnectionManagerService(
     val globalStateHandler: GlobalStateHandler = get().get(),
-//    val downloadManager: DownloadManager = get().get()
+    val downloadManager: DownloadManager = get().get()
 ) : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -82,6 +82,7 @@ class ConnectionManagerService(
             "Service Active",
             "No active LunarLink connection"
         )
+        downloadManager.startPolling()
         // Service starts silently; notification will show when setLunarConnection is called
     }
 

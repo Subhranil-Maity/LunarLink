@@ -13,12 +13,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlin.String
 
-//data class ExplorerConfig(
-//    val host: String,
-//    val username: String,
-//    val password: String,
-//)
-
 class GlobalStateHandler {
     private val _connection = MutableStateFlow<LunarServerRepo?>(null)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())

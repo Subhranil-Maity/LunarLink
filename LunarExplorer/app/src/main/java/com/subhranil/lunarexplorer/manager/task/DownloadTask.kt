@@ -22,6 +22,11 @@ class DownloadTask private constructor(
     @Volatile private var file: File = createFile()
     private var outputStream: FileOutputStream = FileOutputStream(file, true)
     private var error: Throwable? = null
+    private val ranges = (0 until (totalSize + chunkSize - 1) / chunkSize).map { idx ->
+        val start = idx * chunkSize
+        val end = minOf(start + chunkSize - 1, totalSize - 1)
+        start..end
+    }.toMutableList()
 
     fun getFile(): File = file
 
@@ -58,14 +63,28 @@ class DownloadTask private constructor(
         outputStream.flush()
     }
     private fun getAcceptedFileName(): File {
-        var finalFile = File(file.parent, fileName)
+        val parentDir = file.parentFile ?: return file
+        val dotIndex = fileName.lastIndexOf('.')
+        val baseName: String
+        val extension: String
+
+        if (dotIndex != -1) {
+            baseName = fileName.substring(0, dotIndex)
+            extension = fileName.substring(dotIndex) // includes the dot, e.g. ".mp4"
+        } else {
+            baseName = fileName
+            extension = ""
+        }
+
+        var finalFile = File(parentDir, fileName)
         var i = 1
-        while (finalFile.exists()){
-            finalFile = File(file.parent, "$fileName ($i)")
+        while (finalFile.exists()) {
+            finalFile = File(parentDir, "$baseName ($i)$extension")
             i++
         }
         return finalFile
     }
+
 
     fun finalizeDownload() {
         outputStream.close()
@@ -75,39 +94,29 @@ class DownloadTask private constructor(
         }
     }
 
-
-
-    suspend fun start() {
-        try {
-            started = true
-            onStart?.invoke(this)
-
-            // Generate ranges internally
-            val ranges = (0 until (totalSize + chunkSize - 1) / chunkSize).map { idx ->
-                val start = idx * chunkSize
-                val end = minOf(start + chunkSize - 1, totalSize - 1)
-                start..end
-            }
-
-            for (range in ranges) {
-                executor(this, range) // pass range to executor
-            }
-
-            completed = true
-            onComplete?.invoke(this)
-        } catch (e: Throwable) {
-            onError?.invoke(this, e)
-        }
-    }
-
     fun updateProgress(bytesDownloaded: Long) {
         downloadedBytes += bytesDownloaded
         progressValue = downloadedBytes.toDouble() / totalSize
     }
 
-    fun poll() {
+    suspend fun poll() {
         if (started && !completed) {
+            if (ranges.isEmpty()) {
+                completed = true
+                onComplete?.invoke(this)
+                return
+            }
+            val range = ranges.removeFirstOrNull()!!
+            executor(this, range)
+            updateProgress(range.last - range.first + 1)
             onProgress?.invoke(this, progressValue)
+        }
+    }
+
+    fun start() {
+        if (!started) {
+            started = true
+            onStart?.invoke(this)
         }
     }
 
@@ -117,7 +126,7 @@ class DownloadTask private constructor(
         private val url: String,
         private val outputFile: String
     ) {
-        private var chunkSize: Long = 1024 * 1024 // default 1MB
+        private var chunkSize: Long = 1024 * 1024 *10 // default 10MB
         private var totalSize: Long = -1
         private var onStart: ((DownloadTask) -> Unit)? = null
         private var onProgress: ((DownloadTask, Double) -> Unit)? = null

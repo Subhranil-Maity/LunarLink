@@ -367,7 +367,7 @@ class ExplorerViewModel(
                     path = metaData.absolutePath,
                     range = range
                 ).onSuccess {
-                    task.updateProgress(it.size.toLong())
+//                    task.updateProgress(it.size.toLong())
                     task.appendData(it)
                 }.onError {
                     task.fail(Exception("Failed to get chunk: $it"))
@@ -377,30 +377,7 @@ class ExplorerViewModel(
                 task.finalizeDownload()
             }
             .build()
-        downloadManager.addTask(task)
-        viewModelScope.launch { downloadManager.startPolling() }
-        viewModelScope.launch { task.start() }
-
-
-//        Toast.makeText(get().get(), "WARNING: This feature is Experimental", Toast.LENGTH_SHORT).show()
-//        if (metaData.size >= 15000000){
-//            Toast.makeText(get().get(), "File May Be too Big TO Download At ONCE", Toast.LENGTH_SHORT).show()
-//
-//        }
-//        viewModelScope.launch {
-//            withHandledError(fs.getCompleteFile(metaData.absolutePath)){
-////                Toast.makeText(get().get(), it.size.toString(), Toast.LENGTH_SHORT).show()
-//                try {
-//                    val savedUri = saveBytesToDownloadsWithGuessedMime(get().get(), it, metaData.name)
-//                    // savedUri is a content:// URI pointing to the file in Downloads
-//                    showSnackbar("Downloaded")
-//                } catch (e: Exception) {
-//                    // handle error
-//                    e.printStackTrace()
-//                    showSnackbar("Download Failed")
-//                }
-//            }
-//        }
+        downloadManager.addToDownloadQueue(task)
     }
 
     private fun onRename(metaData: LunarMetaData) {

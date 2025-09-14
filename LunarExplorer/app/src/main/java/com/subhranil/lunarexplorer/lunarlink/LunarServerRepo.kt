@@ -317,17 +317,6 @@ class LunarServerRepo(
         path: String,
         range: LongRange
     ): FileSystemResult<ByteArray>
-//    =
-//        makeRequest<FileData, ByteArray>(
-//            url = ,
-//            method = HttpMethod.Get,
-//            parameters = mapOf("path" to path),
-//            customHeaders = {
-//                append(HttpHeaders.Range, "bytes=${range.first}-${range.last}")
-//            }
-//        ) {
-//            it.data.toByteArrayUnsigned()
-//        }
     {
         val response = client.request("$baseUrl/api/v1/fs/download_file") {
             this.method = HttpMethod.Get

@@ -74,6 +74,9 @@ class ConnectionManagerService(
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, notification)
     }
+    private fun isDownloadManagerAction(action: String): Boolean{
+        return action.startsWith(DownloadManager.ACTION_PREFIX)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -95,6 +98,10 @@ class ConnectionManagerService(
 
     /** Handle Disconnect action */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (isDownloadManagerAction(intent?.action ?: "")) {
+            downloadManager.handleAction(intent!!)
+            return super.onStartCommand(intent, flags, startId)
+        }
         if (intent?.action == ACTION_DISCONNECT) {
             globalStateHandler.disconnect()
             updateNotification("Not connected", "No active LunarLink connection")

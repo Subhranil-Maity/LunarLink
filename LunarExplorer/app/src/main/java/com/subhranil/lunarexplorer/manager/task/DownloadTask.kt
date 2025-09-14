@@ -2,6 +2,7 @@ package com.subhranil.lunarexplorer.manager.task
 
 import android.os.Environment
 import android.util.Log
+import kotlinx.coroutines.flow.update
 import java.io.File
 import java.io.FileOutputStream
 
@@ -91,6 +92,7 @@ class DownloadTask private constructor(
 
     fun updateProgress(bytesDownloaded: Long) {
         downloadedBytes += bytesDownloaded
+        if (state is DownloadState.PAUSED) return
         state = DownloadState.IN_PROGRESS(downloadedBytes.toFloat() / totalSize)
     }
 
@@ -117,21 +119,27 @@ class DownloadTask private constructor(
             onStart?.invoke(this)
         }
     }
+    fun pause(){
+        val currentState = state
+        if (currentState is DownloadState.IN_PROGRESS){
+            state = DownloadState.PAUSED(currentState.progress)
+        }
+    }
+    fun resume(){
+        val currentState = state
+        if (currentState is DownloadState.PAUSED){
+            state = DownloadState.IN_PROGRESS(currentState.pausedAt)
+        }
+    }
     // --- State ---
     sealed class DownloadState {
         object PENDING : DownloadState()
         class IN_PROGRESS(val progress: Float) : DownloadState()
         object COMPLETED : DownloadState()
-        class FAILED(error: Throwable) : DownloadState()
+        class FAILED(val error: Throwable) : DownloadState()
 
-        override fun toString(): String {
-            return when (this) {
-                is PENDING -> "PENDING"
-                is IN_PROGRESS -> "IN_PROGRESS(progress=${"%.2f".format(progress * 100)}%)"
-                is COMPLETED -> "COMPLETED"
-                is FAILED -> "FAILED(error=)"
-            }
-        }
+        class PAUSED(val pausedAt: Float) : DownloadState()
+
     }
 
     // --- Builder pattern ---

@@ -5,6 +5,7 @@ import com.subhranil.lunarexplorer.explorer.ExplorerViewModel
 import com.subhranil.lunarexplorer.home.HomeViewModel
 import com.subhranil.lunarexplorer.home.store.HomeStorage
 import com.subhranil.lunarexplorer.lunarlink.provideHttpClient
+import com.subhranil.lunarexplorer.manager.DownloadManager
 import com.subhranil.lunarexplorer.settings.AppSettings
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
@@ -15,6 +16,7 @@ var singletons = module {
     single { provideHttpClient() }
     singleOf(::HomeStorage)
     singleOf(::GlobalStateHandler)
+    singleOf(::DownloadManager)
 }
 
 

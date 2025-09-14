@@ -1,15 +1,13 @@
 package com.subhranil.lunarexplorer.explorer
 
-import android.widget.Toast
+import android.annotation.SuppressLint
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.explorer.clipboard.NameConflictRequest
@@ -21,26 +19,21 @@ import com.subhranil.lunarexplorer.fs.findCollisions
 import com.subhranil.lunarexplorer.fs.generateNonConflictingPath
 import com.subhranil.lunarexplorer.fs.getBasePath
 import com.subhranil.lunarexplorer.fs.getNewPath
-import com.subhranil.lunarexplorer.io.saveBytesToDownloadsWithGuessedMime
 import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
+import com.subhranil.lunarexplorer.manager.DownloadManager
+import com.subhranil.lunarexplorer.manager.task.DownloadTask
 import com.subhranil.lunarexplorer.models.EntryType
-import com.subhranil.lunarexplorer.models.FolderInfo
 import com.subhranil.lunarexplorer.models.LunarMetaData
 import com.subhranil.lunarexplorer.models.Mounts
-import com.subhranil.lunarexplorer.models.isDir
 import com.subhranil.lunarexplorer.result.FileSystemErrors
 import com.subhranil.lunarexplorer.result.LunarResult
 import com.subhranil.lunarexplorer.result.RootError
-import com.subhranil.lunarexplorer.services.ConnectionManagerService
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext.get
-import kotlin.jvm.Throws
-
 
 
 class ExplorerViewModel(
@@ -66,6 +59,9 @@ class ExplorerViewModel(
                 it.copy(
                     isConnected = false
                 )
+            }
+            if (globalStateHandler.connection.value == null){
+                exitScreenCallback()
             }
             viewModelScope.launch {
                 globalStateHandler.connection.collect { state ->
@@ -358,27 +354,53 @@ class ExplorerViewModel(
         onExtraOptionDismissed()
     }
 
+    @SuppressLint("MissingPermission")
     private fun onDownload(metaData: LunarMetaData) {
         if (metaData.entryType == EntryType.DIRECTORY) return
-        Toast.makeText(get().get(), "WARNING: This feature is Experimental", Toast.LENGTH_SHORT).show()
-        if (metaData.size >= 15000000){
-            Toast.makeText(get().get(), "File May Be too Big TO Download At ONCE", Toast.LENGTH_SHORT).show()
-
-        }
-        viewModelScope.launch {
-            withHandledError(fs.getCompleteFile(metaData.absolutePath)){
-//                Toast.makeText(get().get(), it.size.toString(), Toast.LENGTH_SHORT).show()
-                try {
-                    val savedUri = saveBytesToDownloadsWithGuessedMime(get().get(), it, metaData.name)
-                    // savedUri is a content:// URI pointing to the file in Downloads
-                    showSnackbar("Downloaded")
-                } catch (e: Exception) {
-                    // handle error
-                    e.printStackTrace()
-                    showSnackbar("Download Failed")
+        val downloadManager: DownloadManager = get().get()
+        val task = DownloadTask.Builder(
+            url = metaData.absolutePath,
+            outputFile = metaData.name
+        ).totalSize(metaData.size)
+            .executor { task, range ->
+                fs.getFileChunk(
+                    path = metaData.absolutePath,
+                    range = range
+                ).onSuccess {
+                    task.updateProgress(it.size.toLong())
+                    task.appendData(it)
+                }.onError {
+                    task.fail(Exception("Failed to get chunk: $it"))
                 }
             }
-        }
+            .onComplete { task ->
+                task.finalizeDownload()
+            }
+            .build()
+        downloadManager.addTask(task)
+        viewModelScope.launch { downloadManager.startPolling() }
+        viewModelScope.launch { task.start() }
+
+
+//        Toast.makeText(get().get(), "WARNING: This feature is Experimental", Toast.LENGTH_SHORT).show()
+//        if (metaData.size >= 15000000){
+//            Toast.makeText(get().get(), "File May Be too Big TO Download At ONCE", Toast.LENGTH_SHORT).show()
+//
+//        }
+//        viewModelScope.launch {
+//            withHandledError(fs.getCompleteFile(metaData.absolutePath)){
+////                Toast.makeText(get().get(), it.size.toString(), Toast.LENGTH_SHORT).show()
+//                try {
+//                    val savedUri = saveBytesToDownloadsWithGuessedMime(get().get(), it, metaData.name)
+//                    // savedUri is a content:// URI pointing to the file in Downloads
+//                    showSnackbar("Downloaded")
+//                } catch (e: Exception) {
+//                    // handle error
+//                    e.printStackTrace()
+//                    showSnackbar("Download Failed")
+//                }
+//            }
+//        }
     }
 
     private fun onRename(metaData: LunarMetaData) {

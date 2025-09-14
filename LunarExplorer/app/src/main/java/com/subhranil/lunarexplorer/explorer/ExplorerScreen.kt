@@ -64,19 +64,8 @@ import org.koin.compose.koinInject
 fun ExplorerScreen(
     modifier: Modifier = Modifier,
     viewModel: ExplorerViewModel = koinViewModel(),
-    globalStateHandler: GlobalStateHandler = koinInject(),
     onExitExplorer: () -> Unit
 ) {
-//    val conn by globalStateHandler.connection.collectAsState()
-//    val context = LocalContext.current
-//    if (conn == null) {
-//        Toast.makeText(
-//            context,
-//            "Connection is null, going back",
-//            Toast.LENGTH_SHORT
-//        ).show()
-//        onExitExplorer()
-//    }
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val onAction = viewModel::onAction
     viewModel.setExitCallBack {

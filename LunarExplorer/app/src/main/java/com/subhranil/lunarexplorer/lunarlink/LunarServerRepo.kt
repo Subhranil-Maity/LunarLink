@@ -25,14 +25,19 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.get
+import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
+import io.ktor.http.HeadersBuilder
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import io.ktor.serialization.JsonConvertException
 import io.ktor.utils.io.InternalAPI
 import kotlinx.coroutines.currentCoroutineContext
@@ -40,6 +45,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.koin.core.context.GlobalContext.get
+import kotlin.collections.component1
+import kotlin.collections.component2
 
 
 suspend fun isLunarHostAlive(
@@ -47,7 +54,7 @@ suspend fun isLunarHostAlive(
     client: HttpClient
 ): LunarHost? {
     return try {
-        val response = client.request("${host.host}/api/get_info"){
+        val response = client.request("${host.host}/api/get_info") {
             method = HttpMethod.Get
         }
         val data = Json.decodeFromString<InfoDto>(response.body())
@@ -71,8 +78,9 @@ class LunarServerRepo(
     private val pass: String,
 ) {
     private var token: String = ""
+
     @OptIn(InternalAPI::class)
-     suspend fun connect(): FileSystemResult<Unit> {
+    suspend fun connect(): FileSystemResult<Unit> {
         try {
             val dto = LoginRequestDto(
                 username = this@LunarServerRepo.userName,
@@ -121,14 +129,19 @@ class LunarServerRepo(
 
     }
 
+
     private suspend inline fun <reified Dto, reified Response> makeRequest(
         url: String,
         method: HttpMethod,
         parameters: Map<String, String> = emptyMap(),
+        noinline customHeaders: HeadersBuilder.() -> Unit = {},
         onSuccess: (Dto) -> Response
     ): FileSystemResult<Response> {
         return try {
             val response = client.request(url) {
+                headers(customHeaders)
+
+
                 this.method = method
                 bearerAuth(token = token)
                 parameters.forEach { (key, value) ->
@@ -140,7 +153,7 @@ class LunarServerRepo(
             currentCoroutineContext().ensureActive()
             Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
-        }catch (e: JsonConvertException) {
+        } catch (e: JsonConvertException) {
             currentCoroutineContext().ensureActive()
             Log.d("RemoteServerRepo", e.message.toString())
             LunarResult.Error(FileSystemErrors.SERIALISATION_ERROR)
@@ -154,6 +167,7 @@ class LunarServerRepo(
             LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
         }
     }
+
     private suspend fun requestNoBody(
         url: String,
         method: HttpMethod,
@@ -169,9 +183,14 @@ class LunarServerRepo(
             when (response.status) {
                 HttpStatusCode.OK -> LunarResult.Success(Unit)
                 HttpStatusCode.Unauthorized -> {
-                    Toast.makeText(get().get<Context>(), "unauthorised not handled yet", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        get().get<Context>(),
+                        "unauthorised not handled yet",
+                        Toast.LENGTH_SHORT
+                    ).show()
                     LunarResult.Error(FileSystemErrors.LOGIN_FAILED)
                 }
+
                 else -> {
                     val err = Json.decodeFromString<ErrorDto>(response.body())
                     Log.d("RemoteServerRepo", err.message)
@@ -193,14 +212,14 @@ class LunarServerRepo(
         }
     }
 
-     suspend fun getMounts(): FileSystemResult<Mounts> = makeRequest<MountsDto, Mounts>(
+    suspend fun getMounts(): FileSystemResult<Mounts> = makeRequest<MountsDto, Mounts>(
         url = "$baseUrl/api/v1/fs/mounts",
         method = HttpMethod.Get
     ) {
         it.map()
     }
 
-     suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData> =
+    suspend fun getMetaData(path: String): FileSystemResult<LunarMetaData> =
         makeRequest<MetaDataDto, LunarMetaData>(
             url = "$baseUrl/api/v1/fs/metadata",
             method = HttpMethod.Get,
@@ -209,7 +228,7 @@ class LunarServerRepo(
             it.map()
         }
 
-     suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo> =
+    suspend fun getFolderContent(path: String): FileSystemResult<FolderInfo> =
         makeRequest<FolderContentDto, FolderInfo>(
             url = "$baseUrl/api/v1/fs/get_folder_content",
             method = HttpMethod.Get,
@@ -219,55 +238,121 @@ class LunarServerRepo(
         }
 
 
-     suspend fun createFile(path: String): FileSystemResult<LunarMetaData> =
+    suspend fun createFile(path: String): FileSystemResult<LunarMetaData> =
         makeRequest<MetaDataDto, LunarMetaData>(
             url = "$baseUrl/api/v1/fs/touch",
             method = HttpMethod.Post,
             parameters = mapOf("path" to path)
         ) { dto -> dto.map() }
 
-     suspend fun createFolder(path: String): FileSystemResult<LunarMetaData> =
+    suspend fun createFolder(path: String): FileSystemResult<LunarMetaData> =
         makeRequest<MetaDataDto, LunarMetaData>(
             url = "$baseUrl/api/v1/fs/mkdir",
             method = HttpMethod.Post,
             parameters = mapOf("path" to path)
         ) { dto -> dto.map() }
 
-     suspend fun delete(path: String, permanently: Boolean): FileSystemResult<Unit> =
+    suspend fun delete(path: String, permanently: Boolean): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/delete",
             method = HttpMethod.Delete,
             parameters = mapOf("path" to path, "permanent" to permanently)
         )
 
-     suspend fun rename(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+    suspend fun rename(
+        path: String,
+        newPath: String,
+        shouldOverride: Boolean
+    ): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/rename",
             method = HttpMethod.Patch,
-            parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
+            parameters = mapOf(
+                "path" to path,
+                "new_path" to newPath,
+                "should_overwrite" to shouldOverride
+            )
         )
 
-     suspend fun copy(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+    suspend fun copy(
+        path: String,
+        newPath: String,
+        shouldOverride: Boolean
+    ): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/copy",
             method = HttpMethod.Post,
-            parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
+            parameters = mapOf(
+                "path" to path,
+                "new_path" to newPath,
+                "should_overwrite" to shouldOverride
+            )
         )
 
-     suspend fun move(path: String, newPath: String, shouldOverride: Boolean): FileSystemResult<Unit> =
+    suspend fun move(
+        path: String,
+        newPath: String,
+        shouldOverride: Boolean
+    ): FileSystemResult<Unit> =
         requestNoBody(
             url = "$baseUrl/api/v1/fs/move",
             method = HttpMethod.Patch,
-            parameters = mapOf("path" to path, "new_path" to newPath, "should_overwrite" to shouldOverride)
+            parameters = mapOf(
+                "path" to path,
+                "new_path" to newPath,
+                "should_overwrite" to shouldOverride
+            )
         )
 
-     suspend fun getCompleteFile(path: String): FileSystemResult<ByteArray> =
+    suspend fun getCompleteFile(path: String): FileSystemResult<ByteArray> =
         makeRequest<FileData, ByteArray>(
             url = "$baseUrl/api/v1/fs/read_full_file",
             method = HttpMethod.Get,
             parameters = mapOf("path" to path)
-        ){
+        ) {
             it.data.toByteArrayUnsigned()
         }
+
+    suspend fun getFileChunk(
+        path: String,
+        range: LongRange
+    ): FileSystemResult<ByteArray>
+//    =
+//        makeRequest<FileData, ByteArray>(
+//            url = ,
+//            method = HttpMethod.Get,
+//            parameters = mapOf("path" to path),
+//            customHeaders = {
+//                append(HttpHeaders.Range, "bytes=${range.first}-${range.last}")
+//            }
+//        ) {
+//            it.data.toByteArrayUnsigned()
+//        }
+    {
+        val response = client.request("$baseUrl/api/v1/fs/download_file") {
+            this.method = HttpMethod.Get
+            bearerAuth(token = token)
+            headers {
+                range.let { append(HttpHeaders.Range, "bytes=${it.first}-${it.last}") }
+            }
+            parameter("path", path)
+        }
+
+        if (!response.status.isSuccess()) {
+            Log.d("TestWork", "${response}}")
+//            throw RuntimeException("Failed to fetch file chunk: ${response.status}")
+            return LunarResult.Error(FileSystemErrors.UNKNOWN_ERROR)
+        }
+        return LunarResult.Success(response.body())
+    }
+
+    suspend fun getDeviceInfo(): FileSystemResult<InfoDto> =
+        makeRequest<InfoDto, InfoDto>(
+            url = "$baseUrl/api/get_info",
+            method = HttpMethod.Get
+        ) {
+            it
+        }
+
 }
 

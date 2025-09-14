@@ -41,7 +41,8 @@ fun OptionPage(
         // Hot Fix
         if (selected.entryType == EntryType.FILE){
             options.add(ExplorerOptions(
-                label = "Download ALl At Once",
+//                label = "Download ALl At Once",
+                label = "Download",
                 icon = ImageVector.vectorResource(R.drawable.download_icon),
                 type = ExplorerOptionType.DOWNLOAD
             ))

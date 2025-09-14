@@ -23,6 +23,7 @@ import androidx.core.app.NotificationCompat
 import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.R
 import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
+import com.subhranil.lunarexplorer.manager.DownloadManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,39 +60,11 @@ fun rememberConnectionService(): ConnectionManagerService? {
 
 // ---------------- ConnectionManagerService ----------------
 class ConnectionManagerService(
-    val globalStateHandler: GlobalStateHandler = get().get()
+    val globalStateHandler: GlobalStateHandler = get().get(),
+//    val downloadManager: DownloadManager = get().get()
 ) : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-//    private var lunarConnection: LunarServerRepo? = null
-    /** Getters */
-//    fun getLunarConnection(): LunarServerRepo? = lunarConnection
-//    fun hasLink(): Boolean = lunarConnection != null
-
-    /** Set connection and auto-update notification */
-//    fun setLunarConnection(connection: LunarServerRepo?) {
-//        lunarConnection = connection
-//
-//        // Ensure foreground service is started
-//
-//
-//
-//        // Update notification dynamically
-//        if (lunarConnection != null) {
-//            updateNotification("Connected to LunarLink", "Tap to use it")
-//        } else {
-//            updateNotification("Not connected", "No active LunarLink connection")
-//        }
-//    }
-
-    /** Promote service to foreground manually */
-//    fun showNotification() {
-//        if (!isForeground) {
-//            startForeground(NOTIFICATION_ID, createNotification())
-//            isForeground = true
-//        }
-//    }
-
     /** Update notification dynamically */
     fun updateNotificationToConnected(host: String) {
         updateNotification("Connected to $host", "Tap to use it")

@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
@@ -21,6 +22,7 @@ class DownloadManager(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeTasks = mutableListOf<DownloadTask>()
     private val queuedTasks = mutableListOf<DownloadTask>()
+    private val completedTasks = mutableListOf<DownloadTask>()
     private val notificationIdMap = mutableMapOf<DownloadTask, Int>()
     private var notificationCounter = 1
     private var maxDownloadsAtOnce = 3
@@ -38,8 +40,6 @@ class DownloadManager(private val context: Context) {
 
     fun addToDownloadQueue(task: DownloadTask) {
         queuedTasks.add(task)
-//        notificationIdMap[task] = notificationCounter++
-//        showNotification(task, 0f)
     }
 
     fun startNextDownload() {
@@ -62,12 +62,19 @@ class DownloadManager(private val context: Context) {
                 val iterator = activeTasks.iterator()
                 while (iterator.hasNext()) {
                     val task = iterator.next()
-                    if (task.isCompleted()) {
-                        updateNotification(task, 1f, true)
-                        iterator.remove()
-                    } else {
-                        task.poll()
-                        updateNotification(task, task.progress.toFloat(), false)
+                    val state = task.getState()
+                    when (state) {
+                        DownloadTask.DownloadState.COMPLETED -> {
+                            updateNotification(task, 1f, true)
+                            completedTasks.add(task)
+                            iterator.remove()
+                        }
+                        is DownloadTask.DownloadState.FAILED -> {}
+                        is DownloadTask.DownloadState.IN_PROGRESS -> {
+                            task.poll()
+                            updateNotification(task, state.progress, false)
+                        }
+                        DownloadTask.DownloadState.PENDING -> {}
                     }
                 }
                 delay(intervalMs)

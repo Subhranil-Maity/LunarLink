@@ -1,6 +1,7 @@
 package com.subhranil.lunarexplorer.manager.task
 
 import android.os.Environment
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 
@@ -10,18 +11,15 @@ class DownloadTask private constructor(
     val chunkSize: Long,
     val totalSize: Long,
     private val onStart: ((DownloadTask) -> Unit)?,
-    private val onProgress: ((DownloadTask, Double) -> Unit)?,
+    private val onProgress: ((DownloadTask, Float) -> Unit)?,
     private val onComplete: (suspend (DownloadTask) -> Unit)?,
     private val onError: ((DownloadTask, Throwable) -> Unit)?,
     private val executor: suspend (DownloadTask, LongRange) -> Unit
 ) {
-    @Volatile private var started = false
-    @Volatile private var completed = false
-    @Volatile private var progressValue = 0.0
+    @Volatile private var state: DownloadState = DownloadState.PENDING
 
     @Volatile private var file: File = createFile()
     private var outputStream: FileOutputStream = FileOutputStream(file, true)
-    private var error: Throwable? = null
     private val ranges = (0 until (totalSize + chunkSize - 1) / chunkSize).map { idx ->
         val start = idx * chunkSize
         val end = minOf(start + chunkSize - 1, totalSize - 1)
@@ -30,17 +28,14 @@ class DownloadTask private constructor(
 
     fun getFile(): File = file
 
-    fun isCompleted() = completed
-    fun getError(): Throwable? = error
+    fun isCompleted() = state == DownloadState.COMPLETED
+    fun getState() = state
 
     private var downloadedBytes: Long = 0
 
-    val progress: Double
-        get() = progressValue
-
 
     fun fail(exception: Exception) {
-        this.error = exception
+        state = DownloadState.FAILED(exception)
         onError?.invoke(this, exception)
     }
     private fun createFile(): File {
@@ -96,27 +91,46 @@ class DownloadTask private constructor(
 
     fun updateProgress(bytesDownloaded: Long) {
         downloadedBytes += bytesDownloaded
-        progressValue = downloadedBytes.toDouble() / totalSize
+        state = DownloadState.IN_PROGRESS(downloadedBytes.toFloat() / totalSize)
     }
 
     suspend fun poll() {
-        if (started && !completed) {
-            if (ranges.isEmpty()) {
-                completed = true
-                onComplete?.invoke(this)
-                return
+        when (state) {
+            is DownloadState.IN_PROGRESS -> {
+                if (ranges.isEmpty()) {
+                    state = DownloadState.COMPLETED
+                    onComplete?.invoke(this)
+                    return
+                }
+                val range = ranges.removeFirstOrNull()!!
+                executor(this, range)
+                updateProgress(range.last - range.first + 1)
+                onProgress?.invoke(this, (state as DownloadState.IN_PROGRESS).progress)
             }
-            val range = ranges.removeFirstOrNull()!!
-            executor(this, range)
-            updateProgress(range.last - range.first + 1)
-            onProgress?.invoke(this, progressValue)
+            else -> {}
         }
     }
 
     fun start() {
-        if (!started) {
-            started = true
+        if (state is DownloadState.PENDING) {
+            state = DownloadState.IN_PROGRESS(0.0F)
             onStart?.invoke(this)
+        }
+    }
+    // --- State ---
+    sealed class DownloadState {
+        object PENDING : DownloadState()
+        class IN_PROGRESS(val progress: Float) : DownloadState()
+        object COMPLETED : DownloadState()
+        class FAILED(error: Throwable) : DownloadState()
+
+        override fun toString(): String {
+            return when (this) {
+                is PENDING -> "PENDING"
+                is IN_PROGRESS -> "IN_PROGRESS(progress=${"%.2f".format(progress * 100)}%)"
+                is COMPLETED -> "COMPLETED"
+                is FAILED -> "FAILED(error=)"
+            }
         }
     }
 
@@ -129,7 +143,7 @@ class DownloadTask private constructor(
         private var chunkSize: Long = 1024 * 1024 *10 // default 10MB
         private var totalSize: Long = -1
         private var onStart: ((DownloadTask) -> Unit)? = null
-        private var onProgress: ((DownloadTask, Double) -> Unit)? = null
+        private var onProgress: ((DownloadTask, Float) -> Unit)? = null
         private var onComplete: (suspend (DownloadTask) -> Unit)? = null
         private var onError: ((DownloadTask, Throwable) -> Unit)? = null
         private var executor: (suspend (DownloadTask, LongRange) -> Unit)? = null
@@ -137,7 +151,7 @@ class DownloadTask private constructor(
         fun chunkSize(size: Long) = apply { this.chunkSize = size }
         fun totalSize(size: Long) = apply { this.totalSize = size }
         fun onStart(block: (DownloadTask) -> Unit) = apply { this.onStart = block }
-        fun onProgress(block: (DownloadTask, Double) -> Unit) = apply { this.onProgress = block }
+        fun onProgress(block: (DownloadTask, Float) -> Unit) = apply { this.onProgress = block }
         fun onComplete(block: suspend (DownloadTask) -> Unit) = apply { this.onComplete = block }
         fun onError(block: (DownloadTask, Throwable) -> Unit) = apply { this.onError = block }
         fun executor(block: suspend (DownloadTask, LongRange) -> Unit) = apply { this.executor = block }

@@ -2,6 +2,9 @@ package com.subhranil.lunarexplorer.manager.task
 
 import android.os.Environment
 import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
 import java.io.FileOutputStream
@@ -17,9 +20,14 @@ class DownloadTask private constructor(
     private val onError: ((DownloadTask, Throwable) -> Unit)?,
     private val executor: suspend (DownloadTask, LongRange) -> Unit
 ) {
-    @Volatile private var state: DownloadState = DownloadState.PENDING
+    private val _state = MutableStateFlow<DownloadState>(DownloadState.PENDING)
+    val state: StateFlow<DownloadState> = _state.asStateFlow()
+    fun setState(newState: DownloadState) {
+        _state.value = newState
+    }
 
-    @Volatile private var file: File = createFile()
+    @Volatile
+    private var file: File = createFile()
     private var outputStream: FileOutputStream = FileOutputStream(file, true)
     private val ranges = (0 until (totalSize + chunkSize - 1) / chunkSize).map { idx ->
         val start = idx * chunkSize
@@ -30,17 +38,19 @@ class DownloadTask private constructor(
     fun getFile(): File = file
 
     fun isCompleted() = state == DownloadState.COMPLETED
-    fun getState() = state
+//    fun getState() = state
 
     private var downloadedBytes: Long = 0
 
 
     fun fail(exception: Exception) {
-        state = DownloadState.FAILED(exception)
+        setState(DownloadState.FAILED(exception))
         onError?.invoke(this, exception)
     }
+
     private fun createFile(): File {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir =
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         val lunarDir = File(downloadsDir, "Lunar")
 
         if (!lunarDir.exists()) {
@@ -58,6 +68,7 @@ class DownloadTask private constructor(
         outputStream.write(data)
         outputStream.flush()
     }
+
     private fun getAcceptedFileName(): File {
         val parentDir = file.parentFile ?: return file
         val dotIndex = fileName.lastIndexOf('.')
@@ -92,45 +103,72 @@ class DownloadTask private constructor(
 
     fun updateProgress(bytesDownloaded: Long) {
         downloadedBytes += bytesDownloaded
-        if (state is DownloadState.PAUSED) return
-        state = DownloadState.IN_PROGRESS(downloadedBytes.toFloat() / totalSize)
+        val newState = when (state.value) {
+            is DownloadState.PAUSED -> {
+                DownloadState.PAUSED(downloadedBytes.toFloat() / totalSize)
+            }
+
+            is DownloadState.CANCELED -> {
+                DownloadState.CANCELED
+            }
+
+            else -> {
+                DownloadState.IN_PROGRESS(downloadedBytes.toFloat() / totalSize)
+            }
+        }
+        setState(newState) // Use the new function to update the flow
     }
 
     suspend fun poll() {
-        when (state) {
+        when (state.value) {
             is DownloadState.IN_PROGRESS -> {
                 if (ranges.isEmpty()) {
-                    state = DownloadState.COMPLETED
+                    setState(DownloadState.COMPLETED)
                     onComplete?.invoke(this)
                     return
                 }
                 val range = ranges.removeFirstOrNull()!!
                 executor(this, range)
                 updateProgress(range.last - range.first + 1)
-                onProgress?.invoke(this, (state as DownloadState.IN_PROGRESS).progress)
+                onProgress?.invoke(this, (state.value as DownloadState.IN_PROGRESS).progress)
             }
+
             else -> {}
         }
     }
 
     fun start() {
-        if (state is DownloadState.PENDING) {
-            state = DownloadState.IN_PROGRESS(0.0F)
+        if (state.value is DownloadState.PENDING) {
+            setState(DownloadState.IN_PROGRESS(0.0F))
             onStart?.invoke(this)
         }
     }
-    fun pause(){
-        val currentState = state
-        if (currentState is DownloadState.IN_PROGRESS){
-            state = DownloadState.PAUSED(currentState.progress)
+
+    fun pause() {
+        val currentState = state.value
+        if (currentState is DownloadState.IN_PROGRESS) {
+            setState(DownloadState.PAUSED(currentState.progress))
         }
     }
-    fun resume(){
-        val currentState = state
-        if (currentState is DownloadState.PAUSED){
-            state = DownloadState.IN_PROGRESS(currentState.pausedAt)
+
+    fun resume() {
+        val currentState = state.value
+        if (currentState is DownloadState.PAUSED) {
+            setState(DownloadState.IN_PROGRESS(currentState.pausedAt))
         }
     }
+    fun cancel(){
+        setState(DownloadState.CANCELED)
+        try {
+            outputStream.close()
+        } catch (e: Exception) {
+            Log.e("DownloadTask", "Error closing output stream: ${e.message}")
+        }
+        if (file.exists()) {
+            file.delete()
+        }
+    }
+
     // --- State ---
     sealed class DownloadState {
         object PENDING : DownloadState()
@@ -139,6 +177,7 @@ class DownloadTask private constructor(
         class FAILED(val error: Throwable) : DownloadState()
 
         class PAUSED(val pausedAt: Float) : DownloadState()
+        object CANCELED : DownloadState()
 
     }
 
@@ -148,7 +187,7 @@ class DownloadTask private constructor(
         private val url: String,
         private val outputFile: String
     ) {
-        private var chunkSize: Long = 1024 * 1024 *10 // default 10MB
+        private var chunkSize: Long = 1024 * 1024 * 10 // default 10MB
         private var totalSize: Long = -1
         private var onStart: ((DownloadTask) -> Unit)? = null
         private var onProgress: ((DownloadTask, Float) -> Unit)? = null
@@ -162,12 +201,13 @@ class DownloadTask private constructor(
         fun onProgress(block: (DownloadTask, Float) -> Unit) = apply { this.onProgress = block }
         fun onComplete(block: suspend (DownloadTask) -> Unit) = apply { this.onComplete = block }
         fun onError(block: (DownloadTask, Throwable) -> Unit) = apply { this.onError = block }
-        fun executor(block: suspend (DownloadTask, LongRange) -> Unit) = apply { this.executor = block }
+        fun executor(block: suspend (DownloadTask, LongRange) -> Unit) =
+            apply { this.executor = block }
 
         fun build(): DownloadTask {
             if (totalSize <= 0) error("totalSize must be provided and > 0")
             val exec = executor ?: error("Executor must be provided!")
-            if (id == ""){
+            if (id == "") {
                 id = List(16) { ('a'..'z').random() }.joinToString("")
             }
             return DownloadTask(

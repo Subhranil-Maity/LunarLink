@@ -1,10 +1,12 @@
 package com.subhranil.lunarexplorer
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +31,9 @@ import com.subhranil.lunarexplorer.io.saveBytesToDownloadsWithGuessedMime
 import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
 import com.subhranil.lunarexplorer.manager.DownloadManager
 import com.subhranil.lunarexplorer.manager.task.DownloadTask
+import com.subhranil.lunarexplorer.navigation.NavDestinations
 import com.subhranil.lunarexplorer.navigation.RootNavigation
+import com.subhranil.lunarexplorer.navigation.RootNavigationViewModel
 import com.subhranil.lunarexplorer.settings.SettingsUi
 import com.subhranil.lunarexplorer.ui.theme.LunarExplorerTheme
 import io.ktor.client.HttpClient
@@ -40,8 +44,10 @@ import java.io.File
 import kotlin.math.floor
 
 class MainActivity : ComponentActivity() {
+    private val rootNavViewModel: RootNavigationViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleDeepLink(intent)
         enableEdgeToEdge()
         setContent {
             LunarExplorerTheme {
@@ -49,8 +55,25 @@ class MainActivity : ComponentActivity() {
                     RootNavigation(
                         modifier = Modifier
                             .padding(innerPadding)
-                            .fillMaxSize()
+                            .fillMaxSize(),
+                        viewModel = rootNavViewModel
                     )
+                }
+            }
+        }
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle deep link intents when the app is already open
+        handleDeepLink(intent)
+    }
+    private fun handleDeepLink(intent: Intent?) {
+        val uri = intent?.data
+        if (uri != null && uri.scheme == "lunar_explorer" && uri.host == "deeplink") {
+            // Parse the path to determine the destination
+            when (uri.path) {
+                "/downloads" -> {
+                    rootNavViewModel.navigateTo(NavDestinations.DownloadsScreenDestination)
                 }
             }
         }

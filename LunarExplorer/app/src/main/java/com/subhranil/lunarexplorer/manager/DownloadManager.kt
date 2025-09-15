@@ -9,7 +9,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
@@ -18,15 +21,20 @@ import com.subhranil.lunarexplorer.manager.task.DownloadTask.DownloadState
 import com.subhranil.lunarexplorer.services.ConnectionManagerService
 import java.io.File
 import kotlin.math.floor
+import androidx.core.net.toUri
+import com.subhranil.lunarexplorer.MainActivity
+import org.koin.core.context.GlobalContext.get
 
 
 @SuppressLint("MissingPermission")
 
 class DownloadManager(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val activeTasks = mutableListOf<DownloadTask>()
-    private val queuedTasks = mutableListOf<DownloadTask>()
-    private val completedTasks = mutableListOf<DownloadTask>()
+    private val activeTasks: SnapshotStateList<DownloadTask> = mutableStateListOf()
+    private val queuedTasks: SnapshotStateList<DownloadTask> = mutableStateListOf()
+    private val completedTasks: SnapshotStateList<DownloadTask> = mutableStateListOf()
+    private val failedList: SnapshotStateList<DownloadTask> = mutableStateListOf()
+
     private val notificationIdMap = mutableMapOf<DownloadTask, Int>()
     private val lastProgressMap = mutableMapOf<String, Float>()
     private val lastStateMap = mutableMapOf<String, DownloadState>()
@@ -36,6 +44,10 @@ class DownloadManager(private val context: Context) {
         const val ACTION_PREFIX: String = "DOWNLOAD_MANAGER"
     }
 
+    fun getActiveTasks() = activeTasks
+    fun getQueuedTasks() = queuedTasks
+    fun getCompletedTasks() = completedTasks
+    fun getFailedTasks() =  failedList
     private val notificationManager = NotificationManagerCompat.from(context)
 
     init {
@@ -71,7 +83,7 @@ class DownloadManager(private val context: Context) {
                 val iterator = activeTasks.iterator()
                 while (iterator.hasNext()) {
                     val task = iterator.next()
-                    val state = task.getState()
+                    val state = task.state.value
                     when (state) {
                         DownloadState.COMPLETED -> {
                             updateNotification(task)
@@ -80,6 +92,8 @@ class DownloadManager(private val context: Context) {
                         }
                         is DownloadState.FAILED -> {
                             updateNotification(task)
+                            failedList.add(task)
+                            iterator.remove()
                         }
                         is DownloadState.IN_PROGRESS -> {
                             task.poll()
@@ -88,6 +102,16 @@ class DownloadManager(private val context: Context) {
                         DownloadState.PENDING -> {}
                         is DownloadState.PAUSED -> {
                             updateNotification(task)
+                        }
+                        is DownloadState.CANCELED -> {
+                            updateNotification(task)
+                            iterator.remove()
+                            try {
+                                val file = task.getFile()
+                                if (file.exists()) file.delete()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
                     }
                 }
@@ -115,7 +139,7 @@ class DownloadManager(private val context: Context) {
 
     private fun updateNotification(task: DownloadTask) {
         val notificationId = notificationIdMap[task] ?: return
-        val taskState = task.getState()
+        val taskState = task.state.value
         // skip if no changes
         val lastState = lastStateMap[task.id]
         if (lastState == taskState) {
@@ -146,6 +170,7 @@ class DownloadManager(private val context: Context) {
                     is DownloadState.PAUSED -> "Paused: ${task.fileName}"
                     is DownloadState.FAILED -> "Failed: ${task.fileName}"
                     is DownloadState.PENDING -> "Pending: ${task.fileName}"
+                    is DownloadState.CANCELED -> "Canceled: ${task.fileName}"
                 }
             )
             .setOngoing(taskState !is DownloadState.COMPLETED && taskState !is DownloadState.FAILED)
@@ -156,6 +181,23 @@ class DownloadManager(private val context: Context) {
             is DownloadState.IN_PROGRESS -> {
                 builder.setContentText("Progress: ${(taskState.progress * 100).toInt()}%")
                 builder.setProgress(100, (taskState.progress * 100).toInt(), false)
+                val deepLinkUri = "lunar_explorer://deeplink/downloads".toUri()
+                val intent = Intent(
+                    Intent.ACTION_VIEW,
+                    deepLinkUri,
+                    get().get(),
+                    MainActivity::class.java
+                ).apply {
+                    // Flags to ensure correct behavior when the app is open or closed
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+                val pIntent = PendingIntent.getActivity(
+                    get().get(),
+                    task.id.hashCode(), // Use a unique request code
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.setContentIntent(pIntent)
             }
             is DownloadState.PAUSED -> {
                 builder.setContentText("Paused at ${floor(taskState.pausedAt*100)}%")
@@ -193,6 +235,10 @@ class DownloadManager(private val context: Context) {
             }
             is DownloadState.PENDING -> {
                 builder.setContentText("Waiting to start...")
+                builder.setProgress(0, 0, false)
+            }
+            is DownloadState.CANCELED -> {
+                builder.setContentText("Download canceled")
                 builder.setProgress(0, 0, false)
             }
         }

@@ -5,4 +5,8 @@ import androidx.lifecycle.ViewModel
 
 class RootNavigationViewModel: ViewModel() {
     val backStack = mutableStateListOf<NavDestinations>(NavDestinations.HomeScreenDestination)
+
+    fun navigateTo(destination: NavDestinations) {
+        backStack.add(destination)
+    }
 }

@@ -59,8 +59,7 @@ fun DownloadListScreen(
         }
     } else {
         LazyColumn(
-            modifier = modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = modifier.fillMaxSize().padding(8.dp),
         ) {
             items(tasks, key = { it.id }) { task ->
                 DownloadTaskItem(task = task)

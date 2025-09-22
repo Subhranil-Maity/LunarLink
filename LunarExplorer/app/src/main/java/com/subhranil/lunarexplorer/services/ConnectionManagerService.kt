@@ -1,10 +1,6 @@
 package com.subhranil.lunarexplorer.services
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
+import android.app.*
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -22,15 +18,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationCompat
 import com.subhranil.lunarexplorer.GlobalStateHandler
 import com.subhranil.lunarexplorer.R
-import com.subhranil.lunarexplorer.lunarlink.LunarServerRepo
 import com.subhranil.lunarexplorer.manager.DownloadManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import org.koin.core.context.GlobalContext.get
+import org.koin.android.ext.android.inject
 
-// ---------------- Compose helper ----------------
 @Composable
 fun rememberConnectionService(): ConnectionManagerService? {
     val context = LocalContext.current
@@ -57,66 +51,62 @@ fun rememberConnectionService(): ConnectionManagerService? {
 
     return service
 }
+class ConnectionManagerService : Service() {
 
-// ---------------- ConnectionManagerService ----------------
-class ConnectionManagerService(
-    val globalStateHandler: GlobalStateHandler = get().get(),
-    val downloadManager: DownloadManager = get().get()
-) : Service() {
+    private val globalStateHandler: GlobalStateHandler by inject()
+    private val downloadManager: DownloadManager by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    /** Update notification dynamically */
+    private val binder = LocalBinder()
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Start the service as a foreground service with a notification.
+        startForeground(NOTIFICATION_ID, createNotification())
+
+        // Handle incoming actions, including those from the DownloadManager
+        val action = intent?.action
+        if (isDownloadManagerAction(action)) {
+            downloadManager.handleAction(intent!!)
+        } else if (action == ACTION_DISCONNECT) {
+            globalStateHandler.disconnect()
+            updateNotification("Not connected", "No active LunarLink connection")
+        }
+
+        // Start the download polling. It's safe to call this multiple times.
+        downloadManager.startPolling()
+
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceScope.cancel()
+        downloadManager.shutdown()
+    }
+
     fun updateNotificationToConnected(host: String) {
         updateNotification("Connected to $host", "Tap to use it")
     }
+
     fun updateNotification(title: String, content: String) {
         val notification = createNotification(title, content)
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, notification)
     }
-    private fun isDownloadManagerAction(action: String): Boolean{
-        return action.startsWith(DownloadManager.ACTION_PREFIX)
+
+    // Your helper function to check for download manager actions
+    private fun isDownloadManagerAction(action: String?): Boolean{
+        return action?.startsWith(DownloadManager.ACTION_PREFIX) ?: false
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        startForeground(NOTIFICATION_ID, createNotification())
-        updateNotification(
-            "Service Active",
-            "No active LunarLink connection"
-        )
-        downloadManager.startPolling()
-        // Service starts silently; notification will show when setLunarConnection is called
-    }
-
-    override fun onBind(intent: Intent?): IBinder = LocalBinder()
-
-    override fun onDestroy() {
-        super.onDestroy()
-        serviceScope.cancel()
-    }
-
-    /** Handle Disconnect action */
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (isDownloadManagerAction(intent?.action ?: "")) {
-            downloadManager.handleAction(intent!!)
-            return super.onStartCommand(intent, flags, startId)
-        }
-        if (intent?.action == ACTION_DISCONNECT) {
-            globalStateHandler.disconnect()
-            updateNotification("Not connected", "No active LunarLink connection")
-        }
-        return super.onStartCommand(intent, flags, startId)
-    }
-
-    /** Build notification with optional Disconnect button */
+    // Your notification creation logic
     private fun createNotification(
         title: String = "Service Active",
         content: String = "Initializing..."
     ): Notification {
         val channelId = "connection_service_channel"
-
-        // Create channel (for Android O+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
@@ -157,7 +147,7 @@ class ConnectionManagerService(
     }
 
     companion object {
-        private const val NOTIFICATION_ID = 1001
-        private const val ACTION_DISCONNECT = "com.example.app.ACTION_DISCONNECT"
+        const val NOTIFICATION_ID = 1001
+        const val ACTION_DISCONNECT = "com.example.app.ACTION_DISCONNECT"
     }
 }

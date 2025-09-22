@@ -181,27 +181,13 @@ class DownloadManager(private val context: Context) {
             is DownloadState.IN_PROGRESS -> {
                 builder.setContentText("Progress: ${(taskState.progress * 100).toInt()}%")
                 builder.setProgress(100, (taskState.progress * 100).toInt(), false)
-                val deepLinkUri = "lunar_explorer://deeplink/downloads".toUri()
-                val intent = Intent(
-                    Intent.ACTION_VIEW,
-                    deepLinkUri,
-                    get().get(),
-                    MainActivity::class.java
-                ).apply {
-                    // Flags to ensure correct behavior when the app is open or closed
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                }
-                val pIntent = PendingIntent.getActivity(
-                    get().get(),
-                    task.id.hashCode(), // Use a unique request code
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                builder.setContentIntent(pIntent)
+
+                builder.setContentIntent(getGoToDownloadPendingIntent(get().get(), task.id.hashCode()))
             }
             is DownloadState.PAUSED -> {
                 builder.setContentText("Paused at ${floor(taskState.pausedAt*100)}%")
                 builder.setProgress(0, 0, false)
+                builder.setContentIntent(getGoToDownloadPendingIntent(get().get(), task.id.hashCode()))
             }
             is DownloadState.COMPLETED -> {
                 builder.setContentText("File downloaded successfully")
@@ -232,14 +218,19 @@ class DownloadManager(private val context: Context) {
             is DownloadState.FAILED -> {
                 builder.setContentText("Download failed: ${taskState.error}")
                 builder.setProgress(0, 0, false)
+                builder.setContentIntent(getGoToDownloadPendingIntent(get().get(), task.id.hashCode()))
             }
             is DownloadState.PENDING -> {
                 builder.setContentText("Waiting to start...")
                 builder.setProgress(0, 0, false)
+                builder.setContentIntent(getGoToDownloadPendingIntent(get().get(), task.id.hashCode()))
+
             }
             is DownloadState.CANCELED -> {
                 builder.setContentText("Download canceled")
                 builder.setProgress(0, 0, false)
+                builder.setContentIntent(getGoToDownloadPendingIntent(get().get(), task.id.hashCode()))
+
             }
         }
 
@@ -294,6 +285,25 @@ class DownloadManager(private val context: Context) {
             }
         }
     }
+}
+fun getGoToDownloadPendingIntent(context: Context, requestCode: Int): PendingIntent {
+    val deepLinkUri = "lunar_explorer://deeplink/downloads".toUri()
+    val intent = Intent(
+        Intent.ACTION_VIEW,
+        deepLinkUri,
+        context,
+        MainActivity::class.java
+    ).apply {
+        // Flags to ensure correct behavior when the app is open or closed
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+    }
+    val pIntent = PendingIntent.getActivity(
+        context,
+        requestCode, // Use a unique request code
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    return pIntent
 }
 
 

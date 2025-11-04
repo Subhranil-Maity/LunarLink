@@ -2,7 +2,7 @@ use crate::core::lunar_error::{LunarError, LunarResult};
 use crate::core::to_absolute_path;
 use crate::core::types::{EntryType, LunarMetadata};
 use std::fs;
-use std::os::windows::fs::MetadataExt;
+// use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 use tokio::fs::metadata;
@@ -64,7 +64,7 @@ pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata> {
         EntryType::Other
     };
     let size = if entry_type == EntryType::File {
-        fs_metadata.file_size()
+        fs_metadata.len()
     } else {
         0
     };

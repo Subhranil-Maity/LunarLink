@@ -5,7 +5,7 @@ use std::fs;
 // use std::os::windows::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
-use tokio::fs::metadata;
+use tokio::fs::{metadata, symlink_metadata};
 
 /// Asynchronously retrieves metadata for the file or folder at the specified path.
 ///
@@ -37,9 +37,8 @@ use tokio::fs::metadata;
 /// ```
 
 pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata> {
-    let fs_metadata = metadata(path).await?;
+    let fs_metadata = tokio::fs::symlink_metadata(path).await?;
     let is_symlink = fs_metadata.file_type().is_symlink();
-
     let absolute_path = to_absolute_path(path)?.to_string_lossy().to_string();
     let last_modified = fs_metadata
         .modified()?
@@ -47,18 +46,18 @@ pub async fn get_metadata(path: &PathBuf) -> LunarResult<LunarMetadata> {
         .map_err(|e| LunarError::KnownUnknownError(e.to_string()))?
         .as_secs();
     let symlink_location = if is_symlink {
-        match fs::read(path) {
-            Ok(link_data) => Some(String::from_utf8_lossy(&link_data).to_string()),
-            Err(_) => None, // If reading symlink fails, we just return None
+        match std::fs::read_link(path) {
+            Ok(link_path) => Some(link_path.to_string_lossy().to_string()),
+            Err(_) => None,
         }
     } else {
         None
     };
     let entry_type = if is_symlink {
         EntryType::Symlink
-    } else if fs_metadata.file_type().is_dir() {
+    } else if fs_metadata.is_dir() {
         EntryType::Directory
-    } else if fs_metadata.file_type().is_file() {
+    } else if fs_metadata.is_file() {
         EntryType::File
     } else {
         EntryType::Other

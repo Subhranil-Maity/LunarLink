@@ -1,6 +1,5 @@
 package com.subhranil.lunarexplorer.home.selectors
 
-import android.widget.Toast
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -30,18 +29,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.subhranil.lunarexplorer.home.models.LunarHost
 import com.subhranil.lunarexplorer.home.models.LunarHostConnectionConfig
 import com.subhranil.lunarexplorer.lunarlink.isLunarHostAlive
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import org.koin.core.context.GlobalContext.get
+import java.net.URI
 
 /**
  * Composable IP address input.
@@ -209,6 +207,43 @@ fun isValidIpv4(input: String): Boolean {
     }
 }
 
+private fun normalizeHostInput(hostInput: String, portInput: String): String? {
+    val rawHost = hostInput.trim().removeSuffix("/")
+    if (rawHost.isBlank()) return null
+
+    val withScheme = if (
+        rawHost.startsWith("http://", ignoreCase = true) ||
+        rawHost.startsWith("https://", ignoreCase = true)
+    ) {
+        rawHost
+    } else {
+        "http://$rawHost"
+    }
+
+    val uri = try {
+        URI(withScheme)
+    } catch (_: Exception) {
+        return null
+    }
+
+    val scheme = uri.scheme?.lowercase() ?: "http"
+    val host = uri.host ?: return null
+
+    val typedPort = if (portInput.isBlank()) {
+        null
+    } else {
+        portInput.toIntOrNull()?.takeIf { it in 1..65535 } ?: return null
+    }
+    val parsedPort = uri.port.takeIf { it in 1..65535 }
+    val finalPort = typedPort ?: parsedPort
+
+    return if (finalPort != null) {
+        "$scheme://$host:$finalPort"
+    } else {
+        "$scheme://$host"
+    }
+}
+
 @Preview
 @Composable
 private fun LunarServerSelectorPreview(modifier: Modifier = Modifier) {
@@ -224,59 +259,86 @@ fun LunarServerSelector(
     onAction: (HomeActions) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
-    var ip by remember { mutableStateOf("") }
-    var port by remember { mutableStateOf("8000") }
+    var hostInput by remember { mutableStateOf("") }
+    var port by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    val maxPort = 65535
     var isServerReachable by remember { mutableStateOf(false) }
-//    var server by remember { mutableStateOf<LunarHost?>(null) }
     val client = koinInject<HttpClient>()
+    val normalizedHost = remember(hostInput, port) {
+        normalizeHostInput(hostInput = hostInput, portInput = port)
+    }
+
+    val canVerify = normalizedHost != null && username.isNotBlank() && pass.isNotBlank()
+
+    LaunchedEffect(shouldShow) {
+        if (shouldShow) {
+            hostInput = ""
+            port = ""
+            username = ""
+            pass = ""
+            isServerReachable = false
+        }
+    }
+
+    LaunchedEffect(hostInput, port, username, pass) {
+        isServerReachable = false
+    }
+
     if (shouldShow) {
         ModalBottomSheet(
             modifier = modifier,
             sheetState = sheetState,
             onDismissRequest = {
                 onAction(HomeActions.OnDismissAddNewServerDialog)
-                ip = ""
             },
         ) {
-            Column {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Text("Add New Server", style = MaterialTheme.typography.titleLarge)
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    IpAddressInput(
-                        value = ip,
-                        onValueChange = { ip = it }
-                    )
-                    Text(":", style = MaterialTheme.typography.titleLarge)
                     OutlinedTextField(
-                        value = port.toString(),
-                        onValueChange = { newText ->
-                            // Allow only numbers
-                            if (newText.all { it.isDigit() }) {
-                                val newPort = newText.toIntOrNull()
-                                if (newPort != null && newPort in 0..maxPort) {
-                                    port = newText
-                                } else if (newText.isEmpty()) {
-                                    port = ""
-                                }
-                            }
-                        },
-                        label = { Text("Port") },
+                        value = hostInput,
+                        onValueChange = { hostInput = it },
+                        label = { Text("Host (IP or domain)") },
+                        placeholder = { Text("192.168.1.20 or files.example.com") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Next
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(Modifier.width(12.dp))
+
+                    OutlinedTextField(
+                        value = port,
+                        onValueChange = { newText ->
+                            if (newText.all { it.isDigit() } && newText.length <= 5) port = newText
+                        },
+                        label = { Text("Port (opt)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Next
+                        ),
+                        modifier = Modifier.width(140.dp)
                     )
                 }
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 20.dp, top = 10.dp)
                 ) {
                     OutlinedTextField(
                         value = username,
@@ -294,16 +356,26 @@ fun LunarServerSelector(
                             pass = it
                         },
                         label = { Text("Password") },
+                        visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+
+                normalizedHost?.let {
+                    Text(
+                        text = "Resolved host: $it",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 if (!isServerReachable) {
-                    ConnectButton {
+                    ConnectButton(enabled = canVerify) {
+                        val host = normalizedHost ?: return@ConnectButton
                         val reach = isLunarHostAlive(
                             host = LunarHostConnectionConfig(
-                                host = "http://$ip:$port",
+                                host = host,
                                 username = username,
                                 password = pass,
                                 lastConnected = 0L
@@ -313,16 +385,21 @@ fun LunarServerSelector(
                         if (reach !=null ){
                             isServerReachable = true
                         }
-//                        Toast.makeText(
-//                            get().get(),
-//                            reach?.username ?: "Not Recable, \"http://$ip:$port\"",
-//                            Toast.LENGTH_SHORT
-//                        ).show()
                     }
                 } else {
                     Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
                         onClick = {
-                            onAction(HomeActions.OnAddServer(host = "http://$ip:$port", username = username, password = pass))
+                            val host = normalizedHost ?: return@Button
+                            onAction(
+                                HomeActions.OnAddServer(
+                                    host = host,
+                                    username = username,
+                                    password = pass
+                                )
+                            )
                         }
                     ) {
                         Text("Save And Continue")
@@ -335,26 +412,24 @@ fun LunarServerSelector(
 
 @Composable
 private fun ConnectButton(
+    enabled: Boolean,
     onConnect: suspend () -> Unit
 ) {
     var inConnecting by remember { mutableStateOf(false) }
-    var isDisabled by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     OutlinedButton(
         onClick = {
             scope.launch {
                 inConnecting = true
-                isDisabled = true
                 onConnect()
                 inConnecting = false
-                isDisabled = false
             }
         },
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .fillMaxWidth()
             .padding(12.dp),
-        enabled = !isDisabled
+        enabled = enabled && !inConnecting
     ) {
         if (!inConnecting) {
             Text("Connect")

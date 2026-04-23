@@ -138,7 +138,10 @@ class HomeViewModel(
                 val list = _state.value.listOfActiveLunarHosts.toMutableList()
                 list.add(it)
                 _state.update { st ->
-                    st.copy(listOfActiveLunarHosts = list)
+                    st.copy(
+                        listOfActiveLunarHosts = list,
+                        showAddServerDialog = false
+                    )
                 }
                 storage.saveLunarHosts(list.map { host ->
                     LunarHostConnectionConfig(

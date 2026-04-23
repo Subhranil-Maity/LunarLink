@@ -66,7 +66,6 @@ class DownloadTask private constructor(
 
     fun appendData(data: ByteArray) {
         outputStream.write(data)
-        outputStream.flush()
     }
 
     private fun getAcceptedFileName(): File {
@@ -94,6 +93,7 @@ class DownloadTask private constructor(
 
 
     fun finalizeDownload() {
+        outputStream.flush()
         outputStream.close()
         val finalFile = getAcceptedFileName()
         if (file.renameTo(finalFile)) {
@@ -129,8 +129,16 @@ class DownloadTask private constructor(
                 }
                 val range = ranges.removeFirstOrNull()!!
                 executor(this, range)
+                when (state.value) {
+                    is DownloadState.FAILED, is DownloadState.CANCELED -> return
+                    else -> {}
+                }
                 updateProgress(range.last - range.first + 1)
-                onProgress?.invoke(this, (state.value as DownloadState.IN_PROGRESS).progress)
+                when (val currentState = state.value) {
+                    is DownloadState.IN_PROGRESS -> onProgress?.invoke(this, currentState.progress)
+                    is DownloadState.PAUSED -> onProgress?.invoke(this, currentState.pausedAt)
+                    else -> {}
+                }
             }
 
             else -> {}
@@ -224,7 +232,4 @@ class DownloadTask private constructor(
         }
     }
 }
-
-
-
 

@@ -34,12 +34,15 @@ class DownloadManager(private val context: Context) {
     private val queuedTasks: SnapshotStateList<DownloadTask> = mutableStateListOf()
     private val completedTasks: SnapshotStateList<DownloadTask> = mutableStateListOf()
     private val failedList: SnapshotStateList<DownloadTask> = mutableStateListOf()
+    private var pollingJob: Job? = null
 
     private val notificationIdMap = mutableMapOf<DownloadTask, Int>()
     private val lastProgressMap = mutableMapOf<String, Float>()
     private val lastStateMap = mutableMapOf<String, DownloadState>()
     private var notificationCounter = 1
     private var maxDownloadsAtOnce = 3
+    private val activePollIntervalMs = 0L
+    private val idlePollIntervalMs = 2000L
     companion object{
         const val ACTION_PREFIX: String = "DOWNLOAD_MANAGER"
     }
@@ -48,6 +51,7 @@ class DownloadManager(private val context: Context) {
     fun getQueuedTasks() = queuedTasks
     fun getCompletedTasks() = completedTasks
     fun getFailedTasks() =  failedList
+    fun hasWork(): Boolean = activeTasks.isNotEmpty() || queuedTasks.isNotEmpty()
     private val notificationManager = NotificationManagerCompat.from(context)
 
     init {
@@ -61,6 +65,7 @@ class DownloadManager(private val context: Context) {
 
     fun addToDownloadQueue(task: DownloadTask) {
         queuedTasks.add(task)
+        startPolling()
     }
 
     fun startNextDownload() {
@@ -75,52 +80,90 @@ class DownloadManager(private val context: Context) {
     }
 
 
-    fun startPolling(intervalMs: Long = 0L) {
-        scope.launch  {
-            while (isActive) {
-                if (activeTasks.size < maxDownloadsAtOnce) startNextDownload()
-                if (activeTasks.isEmpty()) continue
-                val iterator = activeTasks.iterator()
-                while (iterator.hasNext()) {
-                    val task = iterator.next()
-                    val state = task.state.value
-                    when (state) {
-                        DownloadState.COMPLETED -> {
-                            updateNotification(task)
-                            completedTasks.add(task)
-                            iterator.remove()
-                        }
-                        is DownloadState.FAILED -> {
-                            updateNotification(task)
-                            failedList.add(task)
-                            iterator.remove()
-                        }
-                        is DownloadState.IN_PROGRESS -> {
-                            task.poll()
-                            updateNotification(task)
-                        }
-                        DownloadState.PENDING -> {}
-                        is DownloadState.PAUSED -> {
-                            updateNotification(task)
-                        }
-                        is DownloadState.CANCELED -> {
-                            updateNotification(task)
-                            iterator.remove()
-                            try {
-                                val file = task.getFile()
-                                if (file.exists()) file.delete()
-                            } catch (e: Exception) {
-                                e.printStackTrace()
+    fun startPolling(intervalMs: Long = activePollIntervalMs) {
+        if (pollingJob?.isActive == true) return
+        if (!hasWork()) return
+        val effectiveIntervalMs = intervalMs.coerceAtLeast(0L)
+        pollingJob = scope.launch {
+            try {
+                while (isActive) {
+                    while (activeTasks.size < maxDownloadsAtOnce && queuedTasks.isNotEmpty()) {
+                        startNextDownload()
+                    }
+
+                    if (activeTasks.isEmpty()) {
+                        if (queuedTasks.isEmpty()) break
+                        delay(idlePollIntervalMs)
+                        continue
+                    }
+
+                    val iterator = activeTasks.iterator()
+                    while (iterator.hasNext()) {
+                        val task = iterator.next()
+                        val state = task.state.value
+                        when (state) {
+                            DownloadState.COMPLETED -> {
+                                updateNotification(task)
+                                completedTasks.add(task)
+                                iterator.remove()
+                            }
+
+                            is DownloadState.FAILED -> {
+                                updateNotification(task)
+                                failedList.add(task)
+                                iterator.remove()
+                            }
+
+                            is DownloadState.IN_PROGRESS -> {
+                                try {
+                                    task.poll()
+                                } catch (e: Exception) {
+                                    task.fail(Exception("Download poll failed", e))
+                                }
+                                updateNotification(task)
+                            }
+
+                            DownloadState.PENDING -> {}
+
+                            is DownloadState.PAUSED -> {
+                                updateNotification(task)
+                            }
+
+                            is DownloadState.CANCELED -> {
+                                updateNotification(task)
+                                iterator.remove()
+                                try {
+                                    val file = task.getFile()
+                                    if (file.exists()) file.delete()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
                             }
                         }
                     }
+
+                    if (!hasWork()) break
+
+                    val hasActiveDownload = activeTasks.any { it.state.value is DownloadState.IN_PROGRESS }
+                    if (hasActiveDownload) {
+                        if (effectiveIntervalMs > 0) {
+                            delay(effectiveIntervalMs)
+                        } else {
+                            yield()
+                        }
+                    } else {
+                        delay(idlePollIntervalMs)
+                    }
                 }
-                delay(intervalMs)
+            } finally {
+                pollingJob = null
             }
         }
     }
 
     fun shutdown() {
+        pollingJob?.cancel()
+        pollingJob = null
         scope.cancel()
     }
 
@@ -305,5 +348,3 @@ fun getGoToDownloadPendingIntent(context: Context, requestCode: Int): PendingInt
     )
     return pIntent
 }
-
-

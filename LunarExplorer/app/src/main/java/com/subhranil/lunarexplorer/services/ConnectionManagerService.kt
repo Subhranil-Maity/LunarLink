@@ -72,8 +72,10 @@ class ConnectionManagerService : Service() {
             updateNotification("Not connected", "No active LunarLink connection")
         }
 
-        // Start the download polling. It's safe to call this multiple times.
-        downloadManager.startPolling()
+        // Start polling only if there is pending/active work.
+        if (downloadManager.hasWork()) {
+            downloadManager.startPolling()
+        }
 
         return START_STICKY
     }

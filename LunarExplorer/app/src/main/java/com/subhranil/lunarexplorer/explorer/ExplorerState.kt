@@ -10,6 +10,7 @@ data class ExplorerState(
     val isConnected: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
+    val hideDotFiles: Boolean = false,
     val mounts: Mounts = defaultMounts(),
     val pathHistory: List<String> = emptyList(),
     val currentFolderContent: List<LunarMetaData> = emptyList(),
@@ -56,4 +57,3 @@ data class ClipboardState(
     val actionType: ClipboardActionType,
     val items: List<LunarMetaData>
 )
-

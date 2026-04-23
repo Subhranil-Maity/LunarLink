@@ -38,16 +38,22 @@ fun DetailsPane(
         val scrollState = rememberScrollState()
         val lazyState = rememberLazyListState()
         if (!state.pathHistory.isEmpty()) {
+            val sourceItems = if (state.showSearch) {
+                state.filteredFolderContent
+            } else {
+                state.currentFolderContent
+            }
+            val visibleItems = if (state.hideDotFiles) {
+                sourceItems.filterNot { it.name.startsWith(".") }
+            } else {
+                sourceItems
+            }
             LazyColumn(
                 modifier = Modifier,
                 state = lazyState,
             ) {
                 items(
-                    items = if (state.showSearch) {
-                        state.filteredFolderContent
-                    } else {
-                        state.currentFolderContent
-                    },
+                    items = visibleItems,
                     key = { it.absolutePath }
                 ) {
                     LinearEntry(metaData = it, onClick = {

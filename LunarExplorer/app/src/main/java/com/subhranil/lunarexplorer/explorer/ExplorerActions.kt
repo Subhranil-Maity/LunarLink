@@ -7,6 +7,7 @@ sealed class ExplorerActions {
     data object Refresh : ExplorerActions()
     data object OnClearSnackBar : ExplorerActions()
     data object OnBackPressed : ExplorerActions()
+    data class OnSetHideDotFiles(val hide: Boolean): ExplorerActions()
     data class GoToPath(val path: String): ExplorerActions()
     data class OnLongPressed(val metaData: LunarMetaData): ExplorerActions()
     data class OnActionButtonPressed(val actionType: AppBarActionEnum): ExplorerActions()

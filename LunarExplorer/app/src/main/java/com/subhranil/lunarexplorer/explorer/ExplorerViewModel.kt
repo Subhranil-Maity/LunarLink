@@ -126,6 +126,7 @@ class ExplorerViewModel(
             ExplorerActions.Refresh -> onRefresh()
             is ExplorerActions.GoToPath -> onGoToPath(action.path)
             ExplorerActions.OnBackPressed -> onBackPressed()
+            is ExplorerActions.OnSetHideDotFiles -> onSetHideDotFiles(action.hide)
             is ExplorerActions.OnActionButtonPressed -> onActionButtonPressed(action.actionType)
             is ExplorerActions.OnSearchTextChange -> onSearchTextChange(action.search)
             ExplorerActions.OnSearchDisMissed -> onSearchDismissed()
@@ -138,6 +139,11 @@ class ExplorerViewModel(
             )
             ExplorerActions.OnPaste -> onPaste()
             ExplorerActions.OnClearSnackBar -> clearSnackbar()
+        }
+    }
+    private fun onSetHideDotFiles(hide: Boolean) {
+        _state.update {
+            it.copy(hideDotFiles = hide)
         }
     }
 

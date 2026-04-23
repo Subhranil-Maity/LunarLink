@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -143,6 +144,7 @@ fun ExplorerTopAppBar(
                     Actions(
                         inlineActions = inlineActions,
                         overflowActions = overflowActions,
+                        hideDotFiles = state.hideDotFiles,
                         onAction = onAction
                     )
 //                    IconButton(onClick = { onAction(ExplorerActions.OnSearchStarted) }) {
@@ -192,6 +194,7 @@ private fun Actions(
     modifier: Modifier = Modifier,
     inlineActions: List<AppBarAction>,
     overflowActions: List<AppBarAction>,
+    hideDotFiles: Boolean,
     onAction: (ExplorerActions) -> Unit
     ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -212,55 +215,63 @@ private fun Actions(
     }
 
     // Overflow menu
-    if (overflowActions.isNotEmpty()) {
-        IconButton(onClick = { showMenu = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "More")
-        }
+    IconButton(onClick = { showMenu = true }) {
+        Icon(Icons.Default.MoreVert, contentDescription = "More")
+    }
 
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = {
-                showMenu = false
-                submenuFor = null
+    DropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = {
+            showMenu = false
+            submenuFor = null
 //                            showSubMenu = false
+        }
+    ) {
+        DropdownMenuItem(
+            text = { Text("Hide dot files") },
+            trailingIcon = {
+                Checkbox(
+                    checked = hideDotFiles,
+                    onCheckedChange = null
+                )
+            },
+            onClick = {
+                onAction(ExplorerActions.OnSetHideDotFiles(!hideDotFiles))
+                showMenu = false
             }
-        ) {
-            overflowActions.forEach { action ->
-                if (action.subActions.isEmpty()) {
-                    DropdownMenuItem(
-                        leadingIcon = {
-                            Icon(action.icon, contentDescription = action.label)
-                        },
-                        text = { Text(action.label) },
-                        onClick = {
-                            showMenu = false
+        )
+        overflowActions.forEach { action ->
+            if (action.subActions.isEmpty()) {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(action.icon, contentDescription = action.label)
+                    },
+                    text = { Text(action.label) },
+                    onClick = {
+                        showMenu = false
 //                                        Toast.makeText(
 //                                            context,
 //                                            action.label,
 //                                            Toast.LENGTH_SHORT
 //                                        ).show()
-                            onAction(ExplorerActions.OnActionButtonPressed(action.type))
-                        }
-                    )
-                } else {
-                    DropdownMenuItem(
-                        leadingIcon = {
-                            Icon(action.icon, contentDescription = action.label)
-                        },
-                        text = { Text("${action.label} ➤") },
-                        onClick = {
-                            submenuFor = action
-                            showMenu = false
+                        onAction(ExplorerActions.OnActionButtonPressed(action.type))
+                    }
+                )
+            } else {
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(action.icon, contentDescription = action.label)
+                    },
+                    text = { Text("${action.label} ➤") },
+                    onClick = {
+                        submenuFor = action
+                        showMenu = false
 //                                        showSubMenu = true
-                        }
-                    )
-                }
-//                            }
+                    }
+                )
             }
-
+//                            }
         }
-
-
 
     }
     // Submenu (opens to the right)

@@ -10,6 +10,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -38,11 +39,15 @@ class DownloadManager(private val context: Context) {
 
     private val notificationIdMap = mutableMapOf<DownloadTask, Int>()
     private val lastProgressMap = mutableMapOf<String, Float>()
+    private val lastNotificationAtMs = mutableMapOf<String, Long>()
     private val lastStateMap = mutableMapOf<String, DownloadState>()
     private var notificationCounter = 1
     private var maxDownloadsAtOnce = 3
     private val activePollIntervalMs = 0L
     private val idlePollIntervalMs = 2000L
+    private val chunkBurstPerCycle = 4
+    private val minProgressDeltaForNotify = 0.01f
+    private val minNotifyIntervalMs = 400L
     companion object{
         const val ACTION_PREFIX: String = "DOWNLOAD_MANAGER"
     }
@@ -105,20 +110,30 @@ class DownloadManager(private val context: Context) {
                             DownloadState.COMPLETED -> {
                                 updateNotification(task)
                                 completedTasks.add(task)
+                                clearNotificationTracking(task.id)
                                 iterator.remove()
                             }
 
                             is DownloadState.FAILED -> {
                                 updateNotification(task)
                                 failedList.add(task)
+                                clearNotificationTracking(task.id)
                                 iterator.remove()
                             }
 
                             is DownloadState.IN_PROGRESS -> {
-                                try {
-                                    task.poll()
-                                } catch (e: Exception) {
-                                    task.fail(Exception("Download poll failed", e))
+                                var burst = 0
+                                while (
+                                    burst < chunkBurstPerCycle &&
+                                    task.state.value is DownloadState.IN_PROGRESS
+                                ) {
+                                    try {
+                                        task.poll()
+                                    } catch (e: Exception) {
+                                        task.fail(Exception("Download poll failed", e))
+                                        break
+                                    }
+                                    burst++
                                 }
                                 updateNotification(task)
                             }
@@ -131,6 +146,7 @@ class DownloadManager(private val context: Context) {
 
                             is DownloadState.CANCELED -> {
                                 updateNotification(task)
+                                clearNotificationTracking(task.id)
                                 iterator.remove()
                                 try {
                                     val file = task.getFile()
@@ -183,20 +199,27 @@ class DownloadManager(private val context: Context) {
     private fun updateNotification(task: DownloadTask) {
         val notificationId = notificationIdMap[task] ?: return
         val taskState = task.state.value
-        // skip if no changes
-        val lastState = lastStateMap[task.id]
-        if (lastState == taskState) {
-            if (taskState is DownloadTask.DownloadState.IN_PROGRESS) {
-                val lastProgress = lastProgressMap[task.id] ?: -1f
-                if (kotlin.math.abs(taskState.progress - lastProgress) < 0.01f) {
-                    return
-                }
-                lastProgressMap[task.id] = taskState.progress
-            } else {
+
+        if (taskState is DownloadTask.DownloadState.IN_PROGRESS) {
+            val now = SystemClock.elapsedRealtime()
+            val lastAt = lastNotificationAtMs[task.id] ?: 0L
+            val lastProgress = lastProgressMap[task.id] ?: -1f
+            val progressedEnough =
+                lastProgress < 0f || (taskState.progress - lastProgress) >= minProgressDeltaForNotify
+            val intervalReached = (now - lastAt) >= minNotifyIntervalMs
+            if (!progressedEnough && !intervalReached) {
                 return
             }
+            lastProgressMap[task.id] = taskState.progress
+            lastNotificationAtMs[task.id] = now
+        } else {
+            val lastState = lastStateMap[task.id]
+            if (lastState == taskState) {
+                return
+            }
+            lastStateMap[task.id] = taskState
+            lastNotificationAtMs[task.id] = SystemClock.elapsedRealtime()
         }
-        lastStateMap[task.id] = taskState
 
         // ... build notification normally
         val builder = NotificationCompat.Builder(context, "downloads")
@@ -310,6 +333,12 @@ class DownloadManager(private val context: Context) {
         }
 
         notificationManager.notify(notificationId, builder.build())
+    }
+
+    private fun clearNotificationTracking(taskId: String) {
+        lastProgressMap.remove(taskId)
+        lastNotificationAtMs.remove(taskId)
+        lastStateMap.remove(taskId)
     }
 
     fun handleAction(intent: Intent){

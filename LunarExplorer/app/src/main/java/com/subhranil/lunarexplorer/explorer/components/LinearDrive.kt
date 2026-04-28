@@ -30,6 +30,16 @@ fun LinearDrive(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
+    val driveUsageProgress = if (drive.totalSize <= 0L) {
+        0f
+    } else {
+        (drive.usedSize.toDouble() / drive.totalSize.toDouble())
+            .toFloat()
+            .takeIf { it.isFinite() }
+            ?.coerceIn(0f, 1f)
+            ?: 0f
+    }
+
     Row(
         modifier = modifier
 //            .padding(8.dp, 2.dp)
@@ -51,8 +61,7 @@ fun LinearDrive(
             Text(text = drive.name, style = MaterialTheme.typography.titleMedium)
             LinearProgressIndicator(
                 progress = {
-                    (drive.usedSize.toDouble() / drive.totalSize.toDouble()).coerceIn(0.0, 1.0)
-                        .toFloat()
+                    driveUsageProgress
                 },
                 modifier = Modifier.fillMaxWidth()
             )

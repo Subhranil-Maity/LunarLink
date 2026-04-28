@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +34,11 @@ fun ExplorerSideBar(
             .padding(10.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
+        Column(
+            modifier = Modifier
+                .weight(1f, fill = true)
+                .verticalScroll(rememberScrollState())
+        ) {
             Text("Drives", style = MaterialTheme.typography.titleLarge)
             for (drive in state.mounts.drives) {
                 LinearDrive(drive) {
@@ -63,7 +69,5 @@ fun ExplorerSideBar(
         }
     }
 }
-
-
 
 

@@ -68,8 +68,12 @@ fun DownloadTaskItem(
             ) {
                 when (val state = taskState) {
                     is DownloadTask.DownloadState.IN_PROGRESS -> {
+                        val safeProgress = state.progress
+                            .takeIf { it.isFinite() }
+                            ?.coerceIn(0f, 1f)
+                            ?: 0f
                         val animatedProgress by animateFloatAsState(
-                            targetValue = state.progress,
+                            targetValue = safeProgress,
                             animationSpec = tween(durationMillis = 500, easing = LinearEasing)
                         )
                         CircularProgressIndicator(
@@ -103,15 +107,23 @@ fun DownloadTaskItem(
                 Spacer(Modifier.height(4.dp))
                 when (val state = taskState) {
                     is DownloadTask.DownloadState.IN_PROGRESS -> {
+                        val safeProgress = state.progress
+                            .takeIf { it.isFinite() }
+                            ?.coerceIn(0f, 1f)
+                            ?: 0f
                         Text(
-                            text = "Downloading • ${"%.0f".format(state.progress * 100)}%",
+                            text = "Downloading • ${"%.0f".format(safeProgress * 100)}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray
                         )
                     }
                     is DownloadTask.DownloadState.PAUSED -> {
+                        val safeProgress = state.pausedAt
+                            .takeIf { it.isFinite() }
+                            ?.coerceIn(0f, 1f)
+                            ?: 0f
                         Text(
-                            text = "Paused • ${"%.0f".format(state.pausedAt * 100)}%",
+                            text = "Paused • ${"%.0f".format(safeProgress * 100)}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFFFFA500)
                         )

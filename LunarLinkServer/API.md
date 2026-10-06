@@ -1,8 +1,5 @@
 # LunarLink Server API
 
-> **Status: draft.** This describes the API *after* the planned rework. It is not implemented yet.
-> It will be updated to match the code once the rework lands.
-
 - Base URL: `http(s)://<host>:<port>`
 - All request and response bodies are JSON (`Content-Type: application/json`), except file downloads.
 - Field names are `snake_case`. Enum values are lowercase strings.
@@ -34,15 +31,17 @@ Get a token from `POST /api/auth/login`, then send it on every protected request
 Authorization: Bearer <token>
 ```
 
-- The token is a JWT signed with `auth.jwt_secret`. It only identifies the user (`sub`). Permissions are
-  **not** stored in the token. They are read from the server config on every request, so changing or
-  removing a user takes effect immediately.
+- The token is a JWT (HS256) signed with `auth.jwt_secret`. It only identifies the user (`sub`).
+  Permissions are **not** stored in the token. They are looked up in the loaded config on every request,
+  so after you edit the config and restart the server, existing tokens get the new permissions and
+  tokens of removed users are rejected.
 - Tokens expire after `auth.token_ttl_minutes`. An expired token returns `401 TOKEN_EXPIRED`, and the
   client should log in again.
 - Changing `jwt_secret` invalidates every issued token.
 - Failed logins are rate-limited **per username**. After 5 consecutive failures, further attempts for that
   username are rejected with `429 TOO_MANY_ATTEMPTS` for an increasing backoff period (capped at 5 minutes).
-  A successful login resets the counter.
+  A successful login resets the counter, and failures older than 15 minutes are forgotten. Only usernames
+  that exist in the config are tracked; unknown usernames always get `401 LOGIN_FAILED`.
 - If `auth.enabled = false`, requests without an `Authorization` header run as the user `anonymous` with all
   permissions. Root permissions still apply. The server logs a warning at startup. `GET /api/info` reports
   `auth_required: false` so clients can skip the login screen.
@@ -73,7 +72,7 @@ Every error response uses this shape:
 | 400 | `INVALID_PATH` | Path is empty, relative, contains NUL, or uses `..` to climb above the filesystem root |
 | 400 | `NOT_A_DIRECTORY` | A directory operation (e.g. `list`) was used on a non-directory |
 | 400 | `IS_A_DIRECTORY` | A file operation (e.g. `download`) was used on a directory |
-| 400 | `INVALID_OPERATION` | E.g. copying or moving a folder into itself |
+| 400 | `INVALID_OPERATION` | Copying or moving a folder into itself, a destination that contains the source, or deleting, moving or replacing a root |
 | 401 | `UNAUTHENTICATED` | No `Authorization` header (and auth is enabled) |
 | 401 | `INVALID_TOKEN` | Header isn't `Bearer <token>`, bad signature, or the user no longer exists |
 | 401 | `TOKEN_EXPIRED` | Token is past its expiry |
@@ -84,6 +83,7 @@ Every error response uses this shape:
 | 404 | `NOT_FOUND` | File or folder does not exist |
 | 409 | `ALREADY_EXISTS` | Target exists and `overwrite` is `false` |
 | 409 | `DIRECTORY_NOT_EMPTY` | Deleting a non-empty folder without `recursive: true` |
+| 405 | *(no JSON body)* | Wrong HTTP method for an existing endpoint |
 | 416 | *(no JSON body)* | `Range` header can't be satisfied (download only) |
 | 429 | `TOO_MANY_ATTEMPTS` | Login rate limit. `details.retry_after_seconds` is set, and so is the `Retry-After` header |
 | 500 | `TRASH_FAILED` | Moving to trash failed (e.g. no trash on this system). Retry with `permanent: true` |
@@ -115,7 +115,8 @@ A **root** is a top-level folder the server exposes. Every path must be inside a
 
 - `mount`: configured in `[[roots.mounts]]`.
 - `drive`: every disk mount point. These appear only when `roots.expose_drives = true`, and they use
-  `roots.drive_permissions`.
+  `roots.drive_permissions`. The disk list is refreshed on every `GET /roots` call, so newly attached
+  drives show up without a restart.
 
 If roots are nested (for example a mount inside a drive), the **deepest** root that contains the path is the
 one that applies.
@@ -364,7 +365,8 @@ Copies a file or a whole folder.
 - Folders are copied recursively. Symlinks inside are copied as symlinks, not followed.
 - If `to` exists: with `overwrite: false` the response is `409 ALREADY_EXISTS`. With `overwrite: true` the
   existing target is **replaced** (for a folder, the old folder is removed first, not merged).
-- Copying a folder into itself returns `400 INVALID_OPERATION`.
+- Copying a folder into itself, or onto a folder that contains the source, returns `400 INVALID_OPERATION`.
+- A root can't be the destination (`400 INVALID_OPERATION`).
 
 Response `201`: the [Entry](#entry) at `to`.
 
@@ -378,7 +380,7 @@ Moves or renames a file, folder or symlink. Renaming is a move within the same f
 
 - Moving between disks works: the server copies, then deletes the original.
 - `overwrite` behaves as it does for `copy`.
-- Moving a folder into itself returns `400 INVALID_OPERATION`.
+- Moving a folder into itself, moving a root, or replacing a root returns `400 INVALID_OPERATION`.
 - Moving a path to itself does nothing and returns its entry.
 
 Response `200`: the [Entry](#entry) at `to`.
@@ -395,6 +397,7 @@ Response `200`: the [Entry](#entry) at `to`.
 | `recursive` | `false` | Must be `true` to delete a non-empty folder. Otherwise the response is `409 DIRECTORY_NOT_EMPTY` |
 
 - A symlink is removed itself. Its target is never touched.
+- A root can't be deleted (`400 INVALID_OPERATION`).
 
 Response `204`, no body.
 
@@ -406,17 +409,23 @@ Response `204`, no body.
   `Content-Type`, `Range`. Exposed headers: `Content-Range`, `Accept-Ranges`, `Content-Disposition`,
   `Retry-After`.
 - **Concurrency:** at most `server.max_concurrent_requests` requests are handled at the same time. Extra
-  requests wait in a queue; they are not rejected. An active download counts as one request until it
-  finishes.
+  requests wait in a queue; they are not rejected. A request counts until its response headers are sent,
+  so a download in progress no longer counts once its body is streaming.
+- **Request validation:** unknown fields in JSON bodies and query strings are rejected with
+  `400 BAD_REQUEST`, so typos don't silently do nothing.
 - **Logging:** controlled with `RUST_LOG` (default `info`), e.g. `RUST_LOG=lunar_lib=debug`.
 
 ---
 
 ## Configuration reference
 
-The server reads `config.toml` from its working directory. If the file is missing, a default one is created
-with a random `jwt_secret`. A config in the old format fails to load with a message explaining how to
-regenerate it. See `config.example.toml`.
+Run the server as `lunar_link [config_path]`. The default path is `config.toml` in the working directory.
+
+- If the file is missing, a default one is created with a random `jwt_secret` and a user `admin` with a
+  random password. The password is printed once at startup.
+- Unknown keys are rejected, so typos and settings from older versions fail loudly instead of being
+  ignored. A config in the old format fails to load with a message explaining how to regenerate it.
+- `config.example.toml` shows every option.
 
 ```toml
 [server]
@@ -435,7 +444,7 @@ jwt_secret = "<random, generated on first run>"
 [[users]]
 username = "power"
 password = "power"
-permissions = ["read", "write", "delete"]
+permissions = ["read", "write", "delete"]   # required. [] = can log in but access nothing
 
 [roots]
 expose_drives = false              # add every disk mount point as a root

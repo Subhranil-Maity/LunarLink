@@ -1,0 +1,31 @@
+# LunarLink server configuration. See API.md for details.
+
+[server]
+host = "0.0.0.0"
+port = 1234
+max_concurrent_requests = 100
+# display_name = "My Desktop"   # shown to clients before login. Defaults to the hostname
+show_qr = false                 # print a QR code with the server URL at startup
+
+[auth]
+enabled = true
+token_ttl_minutes = 120
+jwt_secret = "CHANGE-ME-use-a-long-random-string-of-at-least-32-characters"
+
+# Passwords are stored as plain text for now.
+# Permissions: "read", "write", "delete"
+[[users]]
+username = "admin"
+password = "change-me"
+permissions = ["read", "write", "delete"]
+
+[roots]
+expose_drives = false           # share every disk mount point as a root
+drive_permissions = ["read"]    # permissions for drive roots
+
+# Paths support ~, $VAR, ${VAR} and %VAR%.
+# permissions defaults to ["read"]. An empty list hides the mount.
+[[roots.mounts]]
+name = "Home"
+path = "~"
+permissions = ["read", "write", "delete"]

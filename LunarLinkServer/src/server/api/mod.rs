@@ -1,23 +1,17 @@
-use axum::response::IntoResponse;
-use axum::{Json, Router};
-use axum::routing::get;
-
 pub mod auth;
-mod v_one;
-use v_one::v_one_handler;
-use crate::server::api::system::PersonalDevice;
+pub mod download;
+pub mod fs;
+pub mod info;
 
-mod utils;
-mod system;
+use crate::core::error::{LunarError, LunarResult};
 
-pub fn api_handler() -> Router {
-    Router::new()
-        .nest("/v1", v_one_handler())
-        .route("/get_info", get(get_system_info))
-        .nest("/auth", auth::auth_handler())
+/// Runs blocking filesystem work off the async runtime.
+pub(crate) async fn blocking<T, F>(f: F) -> LunarResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> LunarResult<T> + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| LunarError::Internal(e.to_string()))?
 }
-
-async fn get_system_info() -> impl IntoResponse {
-    Json(PersonalDevice::detect())
-}
-

@@ -23,7 +23,7 @@ impl PersonalDevice {
         let os_type = std::env::consts::OS.to_string(); // "windows", "linux", "macos", etc.
         let os_version = System::os_version().unwrap_or("Unknown".to_string());
         // let device_name = System::name().unwrap_or("Unknown".to_string());
-        let device_name = whoami::username().unwrap_or("Unknown".to_string());
+        let device_name = System::host_name().unwrap_or("Unknown".to_string());
 
         Self {
             device_name,

@@ -11,7 +11,7 @@ pub async fn auth_middleware(
     mut req: Request<Body>,
     next: Next,
 ) -> LunarResult<Response<Body>> {
-    let auth_header = req.headers_mut().get(http::header::AUTHORIZATION);
+    let auth_header = req.headers_mut().get(axum::http::header::AUTHORIZATION);
     let auth_header = match auth_header {
         Some(header) => header.to_str().map_err(|_| LunarError::InvalidAuthHeader)?,
         None => return Err(LunarError::MissingAuthHeader),

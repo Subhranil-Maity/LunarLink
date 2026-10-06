@@ -9,7 +9,7 @@ use axum::{Extension, Json};
 use axum_extra::headers::Range;
 use axum_extra::TypedHeader;
 use axum_range::{KnownSize, Ranged};
-use http::StatusCode;
+use axum::http::StatusCode;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use tokio::fs::File;

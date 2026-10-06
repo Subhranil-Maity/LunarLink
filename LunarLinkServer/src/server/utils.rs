@@ -1,5 +1,4 @@
 use crate::core::lunar_error::LunarError;
-use axum::extract::multipart::MultipartError;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -82,12 +81,6 @@ pub fn generate_random_string(len: usize) -> String {
         .take(len)
         .map(char::from)
         .collect()
-}
-
-impl From<MultipartError> for LunarError {
-    fn from(value: MultipartError) -> Self {
-        LunarError::BadRequest
-    }
 }
 
 pub fn expand_env_vars(path: &str) -> String {

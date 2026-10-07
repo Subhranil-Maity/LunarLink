@@ -36,6 +36,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import com.subhranil.lunarexplorer.ui.rememberHaptics
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -163,6 +164,7 @@ private fun DownloadRow(
 ) {
     val record = item.record
     val completed = record.state == DownloadState.COMPLETED
+    val haptics = rememberHaptics()
     ListItem(
         modifier = modifier.then(if (completed) Modifier.clickable { onOpen(item) } else Modifier),
         leadingContent = { EntryIcon(Entry(record.name, record.remotePath, EntryKind.FILE)) },
@@ -195,13 +197,13 @@ private fun DownloadRow(
         trailingContent = {
             Row {
                 when (record.state) {
-                    DownloadState.QUEUED, DownloadState.RUNNING -> IconButton(onClick = { viewModel.pause(item.id) }) {
+                    DownloadState.QUEUED, DownloadState.RUNNING -> IconButton(onClick = { haptics.toggle(false); viewModel.pause(item.id) }) {
                         Icon(painterResource(R.drawable.ic_pause), contentDescription = stringResource(R.string.downloads_pause))
                     }
-                    DownloadState.PAUSED -> IconButton(onClick = { viewModel.resume(item.id) }) {
+                    DownloadState.PAUSED -> IconButton(onClick = { haptics.toggle(true); viewModel.resume(item.id) }) {
                         Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.downloads_resume))
                     }
-                    DownloadState.FAILED -> IconButton(onClick = { viewModel.resume(item.id) }) {
+                    DownloadState.FAILED -> IconButton(onClick = { haptics.toggle(true); viewModel.resume(item.id) }) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.downloads_retry))
                     }
                     DownloadState.COMPLETED -> Unit

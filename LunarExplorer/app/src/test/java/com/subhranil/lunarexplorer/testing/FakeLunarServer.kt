@@ -42,6 +42,10 @@ class FakeLunarServer(
     var validToken: String? = null
         private set
 
+    /** Query parameters of the latest `list` request. */
+    var lastListParams: Map<String, String> = emptyMap()
+        private set
+
     /** Requests seen, as "METHOD /path". */
     val requests = mutableListOf<String>()
 
@@ -194,6 +198,7 @@ class FakeLunarServer(
             }
             "/api/v1/fs/list" -> {
                 val dir = request.url.parameters["path"]!!
+                lastListParams = request.url.parameters.names().associateWith { request.url.parameters[it]!! }
                 if (dir !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")
                 val showHidden = request.url.parameters["show_hidden"] != "false"
                 val all = children(dir).filter { showHidden || !it.substringAfterLast('/').startsWith(".") }

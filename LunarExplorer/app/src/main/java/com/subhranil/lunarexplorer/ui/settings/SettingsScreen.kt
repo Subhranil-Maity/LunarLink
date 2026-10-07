@@ -48,10 +48,11 @@ import com.subhranil.lunarexplorer.R
 import com.subhranil.lunarexplorer.data.api.SortKey
 import com.subhranil.lunarexplorer.data.api.SortOrder
 import com.subhranil.lunarexplorer.data.settings.ThemeMode
+import com.subhranil.lunarexplorer.data.settings.ViewMode
 import com.subhranil.lunarexplorer.ui.resolve
 import org.koin.androidx.compose.koinViewModel
 
-private enum class SettingsDialog { THEME, SORT, REMOVE_SERVERS }
+private enum class SettingsDialog { THEME, SORT, VIEW, REMOVE_SERVERS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +106,14 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = koinViewMo
                         onCheckedChange = viewModel::setDynamicColor,
                     )
                 }
+                item {
+                    SwitchItem(
+                        title = stringResource(R.string.settings_haptics),
+                        summary = stringResource(R.string.settings_haptics_summary),
+                        checked = settings.hapticsEnabled,
+                        onCheckedChange = viewModel::setHaptics,
+                    )
+                }
 
                 item { SectionHeader(stringResource(R.string.settings_browsing)) }
                 item {
@@ -121,6 +130,13 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = koinViewMo
                         headlineContent = { Text(stringResource(R.string.settings_default_sort)) },
                         supportingContent = { Text(sortLabel(settings.sortKey) + order) },
                         modifier = Modifier.clickable { dialog = SettingsDialog.SORT },
+                    )
+                }
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_default_view)) },
+                        supportingContent = { Text(viewModeLabel(settings.viewMode)) },
+                        modifier = Modifier.clickable { dialog = SettingsDialog.VIEW },
                     )
                 }
 
@@ -159,6 +175,14 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = koinViewMo
             key = settings.sortKey,
             order = settings.sortOrder,
             onChange = viewModel::setSort,
+            onDismiss = { dialog = null },
+        )
+        SettingsDialog.VIEW -> ChoiceDialog(
+            title = stringResource(R.string.settings_default_view),
+            options = ViewMode.entries,
+            selected = settings.viewMode,
+            label = { viewModeLabel(it) },
+            onSelect = { viewModel.setViewMode(it); dialog = null },
             onDismiss = { dialog = null },
         )
         SettingsDialog.REMOVE_SERVERS -> AlertDialog(
@@ -202,6 +226,14 @@ fun themeLabel(theme: ThemeMode): String = stringResource(
         ThemeMode.SYSTEM -> R.string.settings_theme_system
         ThemeMode.LIGHT -> R.string.settings_theme_light
         ThemeMode.DARK -> R.string.settings_theme_dark
+    }
+)
+
+@Composable
+fun viewModeLabel(mode: ViewMode): String = stringResource(
+    when (mode) {
+        ViewMode.LIST -> R.string.explorer_view_list
+        ViewMode.GRID -> R.string.explorer_view_grid
     }
 )
 

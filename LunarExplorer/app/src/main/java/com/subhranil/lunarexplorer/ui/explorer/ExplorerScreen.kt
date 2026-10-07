@@ -14,6 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import com.subhranil.lunarexplorer.data.settings.ViewMode
+import com.subhranil.lunarexplorer.ui.rememberHaptics
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -103,6 +111,8 @@ fun ExplorerScreen(
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it.resolve(context)) } }
+    val haptics = rememberHaptics()
+    LaunchedEffect(viewModel, haptics) { viewModel.feedback.collect { haptics.result(it) } }
 
     val twoPane = currentWindowAdaptiveInfoV2().windowSizeClass
         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
@@ -331,6 +341,13 @@ private fun MainTopBar(
                 IconButton(onClick = { viewModel.showDialog(ExplorerDialog.Sort) }) {
                     Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.explorer_sort))
                 }
+                val grid = state.viewMode == ViewMode.GRID
+                IconButton(onClick = { viewModel.setViewMode(if (grid) ViewMode.LIST else ViewMode.GRID) }) {
+                    Icon(
+                        painterResource(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view),
+                        contentDescription = stringResource(if (grid) R.string.explorer_view_list else R.string.explorer_view_grid),
+                    )
+                }
             }
             DownloadsButton(activeDownloads, onClick = onOpenDownloads)
             Box {
@@ -424,6 +441,7 @@ private fun SearchTopBar(search: SearchState, canSearchSubfolders: Boolean, view
 @Composable
 private fun SelectionTopBar(state: ExplorerUiState, viewModel: ExplorerViewModel, onDownload: (List<Entry>) -> Unit) {
     val selected = state.selectedEntries
+    val haptics = rememberHaptics()
     TopAppBar(
         navigationIcon = {
             IconButton(onClick = viewModel::clearSelection) {
@@ -440,11 +458,11 @@ private fun SelectionTopBar(state: ExplorerUiState, viewModel: ExplorerViewModel
                     Icon(painterResource(R.drawable.download_icon), contentDescription = stringResource(R.string.explorer_download))
                 }
             }
-            IconButton(onClick = { viewModel.copyToClipboard(selected) }) {
+            IconButton(onClick = { haptics.contextClick(); viewModel.copyToClipboard(selected) }) {
                 Icon(painterResource(R.drawable.copy_icon), contentDescription = stringResource(R.string.explorer_copy), Modifier.size(24.dp))
             }
             if (state.canDelete) {
-                IconButton(onClick = { viewModel.moveToClipboard(selected) }) {
+                IconButton(onClick = { haptics.contextClick(); viewModel.moveToClipboard(selected) }) {
                     Icon(
                         painterResource(R.drawable.move_folder_icon),
                         contentDescription = stringResource(R.string.explorer_move),
@@ -494,20 +512,64 @@ private fun FolderPane(
 ) {
     val items = state.visibleItems
     val search = state.search
+    val grid = state.viewMode == ViewMode.GRID
+    val haptics = rememberHaptics()
     val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     val itemCount by rememberUpdatedState(items.size)
 
     // Reset scroll position when the folder changes.
-    LaunchedEffect(folder.path) { listState.scrollToItem(0) }
+    LaunchedEffect(folder.path) {
+        listState.scrollToItem(0)
+        gridState.scrollToItem(0)
+    }
     // Load the next page when close to the end.
-    LaunchedEffect(listState, folder.path) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+    LaunchedEffect(listState, gridState, folder.path, grid) {
+        snapshotFlow {
+            val visible = if (grid) gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+            else listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+            visible ?: 0
+        }
             .distinctUntilChanged()
             .filter { it >= itemCount - 20 }
             .collect { viewModel.loadMore() }
     }
 
-    PullToRefreshBox(isRefreshing = folder.isRefreshing, onRefresh = viewModel::refresh, modifier = modifier) {
+    // A tick when a pull goes far enough to refresh on release (not for refreshes started elsewhere).
+    val pullState = rememberPullToRefreshState()
+    val refreshing by rememberUpdatedState(folder.isRefreshing)
+    LaunchedEffect(pullState) {
+        snapshotFlow { pullState.distanceFraction >= 1f }
+            .distinctUntilChanged()
+            .filter { it && !refreshing }
+            .collect { haptics.threshold() }
+    }
+
+    val onClick: (Entry) -> Unit = { entry ->
+        if (state.isSelecting) haptics.tick()
+        viewModel.openEntry(entry)
+    }
+    val onLongClick: (Entry) -> Unit = { entry ->
+        if (state.isSelecting) haptics.tick() else haptics.longPress()
+        viewModel.toggleSelection(entry)
+    }
+    val onMore: (Entry) -> Unit = { entry -> viewModel.showDialog(ExplorerDialog.Actions(entry)) }
+    /** Where a search result is, relative to the folder being searched. */
+    val location: (Entry) -> String? = { entry ->
+        if (search?.isServerSearch == true) {
+            ServerPaths.parent(entry.path)?.let { ServerPaths.relative(it, folder.path) }?.ifEmpty { null }
+        } else {
+            null
+        }
+    }
+    val truncatedNote = search?.isServerSearch == true && search.truncated
+
+    PullToRefreshBox(
+        isRefreshing = folder.isRefreshing,
+        onRefresh = viewModel::refresh,
+        state = pullState,
+        modifier = modifier,
+    ) {
         when {
             folder.isLoading && folder.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -537,6 +599,33 @@ private fun FolderPane(
                 else stringResource(R.string.explorer_no_matches, search.query.trim()),
                 icon = painterResource(R.drawable.folder_icon),
             )
+            grid -> LazyVerticalGrid(
+                columns = GridCells.Adaptive(GRID_CELL_MIN),
+                state = gridState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 96.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(items, key = Entry::path) { entry ->
+                    EntryTile(
+                        entry = entry,
+                        selected = entry.path in state.selection,
+                        selecting = state.isSelecting,
+                        onClick = { onClick(entry) },
+                        onLongClick = { onLongClick(entry) },
+                        onMore = { onMore(entry) },
+                        modifier = Modifier.animateItem(),
+                        location = location(entry),
+                    )
+                }
+                if (truncatedNote) {
+                    item(span = { GridItemSpan(maxLineSpan) }) { TruncatedNote(items.size) }
+                }
+                if (folder.isLoadingMore) {
+                    item(span = { GridItemSpan(maxLineSpan) }) { LoadingMore() }
+                }
+            }
             else -> LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -547,36 +636,40 @@ private fun FolderPane(
                         entry = entry,
                         selected = entry.path in state.selection,
                         selecting = state.isSelecting,
-                        onClick = { viewModel.openEntry(entry) },
-                        onLongClick = { viewModel.toggleSelection(entry) },
-                        onMore = { viewModel.showDialog(ExplorerDialog.Actions(entry)) },
+                        onClick = { onClick(entry) },
+                        onLongClick = { onLongClick(entry) },
+                        onMore = { onMore(entry) },
                         modifier = Modifier.animateItem(),
-                        location = if (search?.isServerSearch == true) {
-                            ServerPaths.parent(entry.path)?.let { ServerPaths.relative(it, folder.path) }?.ifEmpty { null }
-                        } else {
-                            null
-                        },
+                        location = location(entry),
                     )
                 }
-                if (search?.isServerSearch == true && search.truncated) {
-                    item {
-                        Text(
-                            stringResource(R.string.explorer_search_truncated, items.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        )
-                    }
+                if (truncatedNote) {
+                    item { TruncatedNote(items.size) }
                 }
                 if (folder.isLoadingMore) {
-                    item {
-                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(24.dp))
-                        }
-                    }
+                    item { LoadingMore() }
                 }
             }
         }
+    }
+}
+
+private val GRID_CELL_MIN = 112.dp
+
+@Composable
+private fun TruncatedNote(count: Int) {
+    Text(
+        stringResource(R.string.explorer_search_truncated, count),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    )
+}
+
+@Composable
+private fun LoadingMore() {
+    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(Modifier.size(24.dp))
     }
 }
 

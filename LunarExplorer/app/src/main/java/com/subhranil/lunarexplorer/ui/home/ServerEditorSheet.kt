@@ -28,6 +28,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import com.subhranil.lunarexplorer.ui.Feedback
+import com.subhranil.lunarexplorer.ui.rememberHaptics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -170,6 +173,15 @@ fun ServerEditorSheet(
 
 @Composable
 private fun TestResult(test: TestState) {
+    val haptics = rememberHaptics()
+    // Confirm the outcome of a connection test, once per result.
+    LaunchedEffect(test) {
+        when (test) {
+            is TestState.Success -> haptics.result(Feedback.SUCCESS)
+            is TestState.Failed -> haptics.result(Feedback.ERROR)
+            else -> Unit
+        }
+    }
     val (icon, color, text) = when (test) {
         is TestState.Success -> Triple(
             Icons.Default.CheckCircle,

@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -15,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.subhranil.lunarexplorer.data.settings.AppSettings
 import com.subhranil.lunarexplorer.data.settings.SettingsRepository
+import com.subhranil.lunarexplorer.ui.LocalHapticsEnabled
 import com.subhranil.lunarexplorer.ui.navigation.AppNavigation
 import com.subhranil.lunarexplorer.ui.theme.LunarTheme
 import com.subhranil.lunarexplorer.ui.theme.isDarkTheme
@@ -58,7 +60,9 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             LunarTheme(themeMode = current.theme, dynamicColor = current.dynamicColor) {
-                AppNavigation(openDownloads = openDownloadsRequests)
+                CompositionLocalProvider(LocalHapticsEnabled provides current.hapticsEnabled) {
+                    AppNavigation(openDownloads = openDownloadsRequests)
+                }
             }
         }
     }

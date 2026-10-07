@@ -20,6 +20,8 @@ import com.subhranil.lunarexplorer.data.api.hasCode
 import com.subhranil.lunarexplorer.data.session.ServerSession
 import com.subhranil.lunarexplorer.data.session.SessionManager
 import com.subhranil.lunarexplorer.data.settings.SettingsRepository
+import com.subhranil.lunarexplorer.data.settings.ViewMode
+import com.subhranil.lunarexplorer.ui.Feedback
 import com.subhranil.lunarexplorer.ui.UiText
 import com.subhranil.lunarexplorer.ui.pluralText
 import com.subhranil.lunarexplorer.ui.toUiText
@@ -33,7 +35,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,19 +52,50 @@ class ExplorerViewModel(
     private val _messages = Channel<UiText>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
 
+    /** Outcomes of user actions, for haptic feedback. */
+    private val _feedback = Channel<Feedback>(Channel.BUFFERED)
+    val feedback = _feedback.receiveAsFlow()
+
     private var session: ServerSession? = null
     private var loadJob: Job? = null
     private var operationJob: Job? = null
     private var searchJob: Job? = null
+
+    // Values this screen saved itself, so their echo from the settings flow (or an older value still
+    // in flight) doesn't undo a newer choice.
+    private val sortEcho = Echo<Pair<SortKey, SortOrder>>()
+    private val hiddenEcho = Echo<Boolean>()
+    private val viewModeEcho = Echo<ViewMode>()
     private var pendingConflict: CompletableDeferred<Pair<ConflictAction, Boolean>>? = null
 
     init {
+        // Follow the saved browsing settings, including changes made on the Settings screen while open.
         viewModelScope.launch {
-            val defaults = settings.settings.first()
-            _state.update {
-                it.copy(sortKey = defaults.sortKey, sortOrder = defaults.sortOrder, showHidden = defaults.showHiddenFiles)
+            var connecting = false
+            settings.settings.collect { prefs ->
+                val before = _state.value
+                val takeSort = sortEcho.accept(prefs.sortKey to prefs.sortOrder)
+                val takeHidden = hiddenEcho.accept(prefs.showHiddenFiles)
+                val takeViewMode = viewModeEcho.accept(prefs.viewMode)
+                _state.update {
+                    it.copy(
+                        sortKey = if (takeSort) prefs.sortKey else it.sortKey,
+                        sortOrder = if (takeSort) prefs.sortOrder else it.sortOrder,
+                        showHidden = if (takeHidden) prefs.showHiddenFiles else it.showHidden,
+                        viewMode = if (takeViewMode) prefs.viewMode else it.viewMode,
+                    )
+                }
+                val after = _state.value
+                if (!connecting) {
+                    connecting = true
+                    launch { connect() }
+                } else {
+                    val sortChanged = before.sortKey != after.sortKey || before.sortOrder != after.sortOrder
+                    val hiddenChanged = before.showHidden != after.showHidden
+                    if (sortChanged || hiddenChanged) reloadFromStart()
+                    if (hiddenChanged) runServerSearch()
+                }
             }
-            connect()
         }
     }
 
@@ -217,15 +249,28 @@ class ExplorerViewModel(
         }
     }
 
+    // Each of these also becomes the new default. The settings flow echoes the same values back,
+    // which is a no-op because the state already matches.
+
     fun setSort(key: SortKey, order: SortOrder) {
         _state.update { it.copy(sortKey = key, sortOrder = order) }
         reloadFromStart()
+        sortEcho.pending = key to order
+        viewModelScope.launch { settings.setSort(key, order) }
     }
 
     fun setShowHidden(show: Boolean) {
         _state.update { it.copy(showHidden = show) }
         reloadFromStart()
         runServerSearch()
+        hiddenEcho.pending = show
+        viewModelScope.launch { settings.setShowHiddenFiles(show) }
+    }
+
+    fun setViewMode(mode: ViewMode) {
+        _state.update { it.copy(viewMode = mode) }
+        viewModeEcho.pending = mode
+        viewModelScope.launch { settings.setViewMode(mode) }
     }
 
     private fun reloadFromStart() {
@@ -320,6 +365,7 @@ class ExplorerViewModel(
                 return@launch
             }
             downloads.enqueue(serverId, _state.value.serverName, files)
+            _feedback.send(Feedback.SUCCESS)
             _messages.send(pluralText(R.plurals.explorer_download_started, files.size))
             if (files.size < entries.size) _messages.send(uiText(R.string.explorer_download_folders_skipped))
         }
@@ -351,8 +397,14 @@ class ExplorerViewModel(
 
     private suspend fun report(result: ApiResult<*>, success: UiText) {
         when (result) {
-            is ApiResult.Success -> _messages.send(success)
-            is ApiResult.Failure -> _messages.send(result.error.toUiText())
+            is ApiResult.Success -> {
+                _feedback.send(Feedback.SUCCESS)
+                _messages.send(success)
+            }
+            is ApiResult.Failure -> {
+                _feedback.send(Feedback.ERROR)
+                _messages.send(result.error.toUiText())
+            }
         }
         refresh()
     }
@@ -505,7 +557,20 @@ class ExplorerViewModel(
             val first = failures.first().toUiText()
             pluralText(R.plurals.explorer_done_partial, failures.size, failures.size, first)
         }
+        _feedback.send(if (failures.isEmpty()) Feedback.SUCCESS else Feedback.ERROR)
         _messages.send(message)
+    }
+
+    /** Skips settings values until the one this screen last saved comes back. */
+    private class Echo<T : Any> {
+        var pending: T? = null
+
+        /** True if [value] from the settings flow should be applied. */
+        fun accept(value: T): Boolean {
+            val expected = pending ?: return true
+            if (value == expected) pending = null
+            return false
+        }
     }
 
     private companion object {

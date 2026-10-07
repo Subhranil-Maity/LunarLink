@@ -84,6 +84,8 @@
     <string name="explorer_sort_kind">Type</string>
     <string name="explorer_sort_descending">Descending</string>
     <string name="explorer_show_hidden">Show hidden files</string>
+    <string name="explorer_view_grid">Grid view</string>
+    <string name="explorer_view_list">List view</string>
     <string name="explorer_new_file">New file</string>
     <string name="explorer_new_folder">New folder</string>
     <string name="explorer_new">New</string>
@@ -148,6 +150,9 @@
     <string name="settings_browsing">Browsing</string>
     <string name="settings_show_hidden_summary">Show files and folders that start with a dot</string>
     <string name="settings_default_sort">Default sort</string>
+    <string name="settings_default_view">Default view</string>
+    <string name="settings_haptics">Haptic feedback</string>
+    <string name="settings_haptics_summary">Vibrate briefly on long-press, selection, pull to refresh and when actions finish</string>
     <string name="settings_data">Data</string>
     <string name="settings_remove_servers">Remove all saved servers</string>
     <string name="settings_remove_servers_summary">Deletes saved addresses and passwords from this device</string>

@@ -5,6 +5,7 @@ import com.subhranil.lunarexplorer.data.api.Permission
 import com.subhranil.lunarexplorer.data.api.Root
 import com.subhranil.lunarexplorer.data.api.SortKey
 import com.subhranil.lunarexplorer.data.api.SortOrder
+import com.subhranil.lunarexplorer.data.settings.ViewMode
 import com.subhranil.lunarexplorer.ui.UiText
 import com.subhranil.lunarexplorer.util.PathStyle
 
@@ -70,6 +71,7 @@ data class ExplorerUiState(
     val sortKey: SortKey = SortKey.NAME,
     val sortOrder: SortOrder = SortOrder.ASC,
     val showHidden: Boolean = true,
+    val viewMode: ViewMode = ViewMode.LIST,
     /** Optional features of the connected server, see [com.subhranil.lunarexplorer.data.api.ServerFeature]. */
     val serverFeatures: Set<String> = emptySet(),
     /** `null` when search is closed. */

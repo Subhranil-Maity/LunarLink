@@ -10,6 +10,7 @@ import com.subhranil.lunarexplorer.data.session.SessionManager
 import com.subhranil.lunarexplorer.data.settings.AppSettings
 import com.subhranil.lunarexplorer.data.settings.SettingsRepository
 import com.subhranil.lunarexplorer.data.settings.ThemeMode
+import com.subhranil.lunarexplorer.data.settings.ViewMode
 import com.subhranil.lunarexplorer.ui.UiText
 import com.subhranil.lunarexplorer.ui.uiText
 import kotlinx.coroutines.channels.Channel
@@ -38,6 +39,10 @@ class SettingsViewModel(
     fun setShowHidden(show: Boolean) = launch { settings.setShowHiddenFiles(show) }
 
     fun setSort(key: SortKey, order: SortOrder) = launch { settings.setSort(key, order) }
+
+    fun setViewMode(mode: ViewMode) = launch { settings.setViewMode(mode) }
+
+    fun setHaptics(enabled: Boolean) = launch { settings.setHaptics(enabled) }
 
     fun removeAllServers() = launch {
         sessions.disconnect()

@@ -5,7 +5,10 @@ import com.subhranil.lunarexplorer.data.download.DownloadStore
 import com.subhranil.lunarexplorer.data.servers.ServerDraft
 import com.subhranil.lunarexplorer.data.servers.ServerRepository
 import com.subhranil.lunarexplorer.data.session.SessionManager
+import com.subhranil.lunarexplorer.data.api.SortKey
+import com.subhranil.lunarexplorer.data.api.SortOrder
 import com.subhranil.lunarexplorer.data.settings.SettingsRepository
+import com.subhranil.lunarexplorer.data.settings.ViewMode
 import com.subhranil.lunarexplorer.testing.FakeCipher
 import com.subhranil.lunarexplorer.testing.FakeDownloadFiles
 import com.subhranil.lunarexplorer.testing.FakeLunarServer
@@ -18,7 +21,10 @@ import com.subhranil.lunarexplorer.ui.explorer.Connection
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerDialog
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerUiState
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerViewModel
+import com.subhranil.lunarexplorer.ui.Feedback
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -47,6 +53,7 @@ class ExplorerViewModelTest {
 
     private fun ExplorerUiState.names() = folder?.items?.map { it.name }
 
+    private val settings = SettingsRepository(tempDataStore())
     private val downloadStore = DownloadStore(tempDataStore())
     private val downloads = DownloadRepository(downloadStore, FakeDownloadFiles(), FakeScheduler(), CoroutineScope(Dispatchers.Default))
 
@@ -54,7 +61,7 @@ class ExplorerViewModelTest {
         val repo = ServerRepository(tempDataStore(), FakeCipher())
         val id = runBlocking { repo.add(ServerDraft("Fake", "http://fake", "user", password, "linux")) }
         val sessions = SessionManager(repo, { fake.api() })
-        return ExplorerViewModel(id, sessions, SettingsRepository(tempDataStore()), downloads)
+        return ExplorerViewModel(id, sessions, settings, downloads)
     }
 
     private suspend fun openShare(vm: ExplorerViewModel): ExplorerUiState {
@@ -172,6 +179,55 @@ class ExplorerViewModelTest {
         vm.openSearch()
         vm.setSearchRecursive(true)
         assertFalse(vm.state.value.search!!.recursive)
+    }
+
+    @Test
+    fun sortHiddenAndViewChoicesAreSaved() = runTest {
+        val vm = viewModel()
+        openShare(vm)
+        vm.setSort(SortKey.NAME, SortOrder.DESC)
+        vm.setShowHidden(false)
+        vm.setViewMode(ViewMode.GRID)
+        // The fake server doesn't sort; hidden files being gone shows the reload used the new options.
+        val reloaded = vm.await { it.names() == listOf("a.txt", "docs") && it.folder?.isRefreshing == false }
+        assertEquals(ViewMode.GRID, reloaded.viewMode)
+        assertEquals(SortOrder.DESC, reloaded.sortOrder)
+        assertEquals("desc", server.lastListParams["order"])
+
+        val saved = withContext(Dispatchers.Default) {
+            withTimeout(5_000) { settings.settings.first { it.viewMode == ViewMode.GRID && !it.showHiddenFiles } }
+        }
+        assertEquals(SortOrder.DESC, saved.sortOrder)
+
+        // A new explorer starts with the saved choices.
+        val next = viewModel()
+        val share = openShare(next)
+        assertEquals(ViewMode.GRID, share.viewMode)
+        assertFalse(share.showHidden)
+        assertEquals(SortOrder.DESC, share.sortOrder)
+    }
+
+    @Test
+    fun settingsChangedElsewhereApplyLive() = runTest {
+        val vm = viewModel()
+        openShare(vm)
+        withContext(Dispatchers.Default) { settings.setShowHiddenFiles(false) }
+        val updated = vm.await { !it.showHidden && it.names() == listOf("a.txt", "docs") }
+        assertFalse(updated.folder!!.isRefreshing)
+    }
+
+    @Test
+    fun actionsReportFeedback() = runTest {
+        val vm = viewModel()
+        openShare(vm)
+        val feedback = mutableListOf<Feedback>()
+        val collector = launch(Dispatchers.Default) { vm.feedback.collect { feedback += it } }
+        vm.create("x", folder = true)
+        vm.await { it.names()?.contains("x") == true }
+        vm.create("x", folder = true) // already exists
+        withContext(Dispatchers.Default) { withTimeout(5_000) { while (feedback.size < 2) delay(10) } }
+        collector.cancel()
+        assertEquals(listOf(Feedback.SUCCESS, Feedback.ERROR), feedback)
     }
 
     @Test

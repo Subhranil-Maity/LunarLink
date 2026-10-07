@@ -1,6 +1,7 @@
 package com.subhranil.lunarexplorer.ui.explorer
 
 import android.text.format.DateUtils
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -50,6 +52,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.subhranil.lunarexplorer.R
 import com.subhranil.lunarexplorer.data.api.Entry
@@ -112,16 +115,97 @@ fun EntryRow(
     )
 }
 
+/** A grid cell: a large preview with the name and size underneath. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SelectionMark() {
+fun EntryTile(
+    entry: Entry,
+    selected: Boolean,
+    selecting: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onMore: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Where the entry is, relative to the folder being searched. Only set for search results. */
+    location: String? = null,
+) {
+    val shape = MaterialTheme.shapes.medium
+    val supporting = location ?: if (entry.isDirLike) "" else formatBytes(entry.size)
+    Surface(
+        shape = shape,
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = modifier
+            .clip(shape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .alpha(if (entry.hidden) 0.65f else 1f),
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                EntryIcon(entry, size = 56.dp)
+                if (selected) {
+                    SelectionMark(
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp),
+                        size = 28.dp,
+                    )
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 10.dp, end = 2.dp, bottom = 6.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        entry.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        minLines = 2,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        supporting,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
+                    )
+                }
+                if (!selecting) {
+                    IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.action_more),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectionMark(modifier: Modifier = Modifier, size: Dp = 40.dp) {
     Box(
-        modifier = Modifier
-            .size(40.dp)
+        modifier = modifier
+            .size(size)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+        Icon(
+            Icons.Default.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(size * 0.6f),
+        )
     }
 }
 

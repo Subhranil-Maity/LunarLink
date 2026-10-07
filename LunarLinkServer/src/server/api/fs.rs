@@ -5,6 +5,7 @@ use crate::core::fs as ops;
 use crate::core::list::{list_dir, ListOptions, Listing, SortKey, SortOrder};
 use crate::core::path::{Leaf, ResolvedPath, RootKind};
 use crate::core::permission::{Permission, Permissions};
+use crate::core::search::{self, SearchOptions, SearchResult};
 use crate::server::api::blocking;
 use crate::server::extract::{ApiJson, ApiQuery};
 use crate::server::middleware::AuthUser;
@@ -14,6 +15,7 @@ use axum::http::StatusCode;
 use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use Permission::{Delete, Read, Write};
@@ -140,6 +142,58 @@ pub async fn list(
     };
     let path = resolved.path;
     Ok(Json(blocking(move || list_dir(&path, &options)).await?))
+}
+
+// ---------- search ----------
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SearchQuery {
+    path: String,
+    query: String,
+    limit: Option<usize>,
+    show_hidden: Option<bool>,
+}
+
+/// Sets the flag when dropped, so a search stops once the client goes away.
+struct CancelOnDrop(Arc<AtomicBool>);
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+pub async fn search(
+    State(state): AppStateRef,
+    Extension(user): Extension<AuthUser>,
+    ApiQuery(query): ApiQuery<SearchQuery>,
+) -> LunarResult<Json<SearchResult>> {
+    let resolved = resolve(&state, &query.path, Leaf::Follow)?;
+    require(&user, &resolved, &[Read])?;
+    let options = SearchOptions {
+        limit: query
+            .limit
+            .unwrap_or(search::DEFAULT_LIMIT)
+            .clamp(1, search::MAX_LIMIT),
+        show_hidden: query.show_hidden.unwrap_or(true),
+        ..Default::default()
+    };
+    let cancel = Arc::new(AtomicBool::new(false));
+    let _guard = CancelOnDrop(cancel.clone());
+    let roots = state.roots();
+    let path = resolved.path;
+    let result = blocking(move || {
+        // Never descend into a nested root the user can't read.
+        let can_enter = |dir: &std::path::Path| {
+            roots
+                .root_for(dir)
+                .is_some_and(|root| user.permissions.intersect(root.permissions).contains(Read))
+        };
+        search::search(&path, &query.query, &options, &cancel, can_enter)
+    })
+    .await?;
+    Ok(Json(result))
 }
 
 // ---------- create ----------

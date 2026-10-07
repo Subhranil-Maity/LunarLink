@@ -50,10 +50,10 @@ class ExplorerViewModelTest {
     private val downloadStore = DownloadStore(tempDataStore())
     private val downloads = DownloadRepository(downloadStore, FakeDownloadFiles(), FakeScheduler(), CoroutineScope(Dispatchers.Default))
 
-    private fun viewModel(password: String = "pw"): ExplorerViewModel {
+    private fun viewModel(password: String = "pw", fake: FakeLunarServer = server): ExplorerViewModel {
         val repo = ServerRepository(tempDataStore(), FakeCipher())
         val id = runBlocking { repo.add(ServerDraft("Fake", "http://fake", "user", password, "linux")) }
-        val sessions = SessionManager(repo, { server.api() })
+        val sessions = SessionManager(repo, { fake.api() })
         return ExplorerViewModel(id, sessions, SettingsRepository(tempDataStore()), downloads)
     }
 
@@ -125,6 +125,53 @@ class ExplorerViewModelTest {
         assertEquals(listOf("docs"), vm.state.value.visibleItems.map { it.name })
         vm.closeSearch()
         assertEquals(3, vm.state.value.visibleItems.size)
+    }
+
+    @Test
+    fun recursiveSearchAsksTheServer() = runTest {
+        server.dir("/share/docs/deep").file("/share/docs/deep/b-notes.txt")
+        val vm = viewModel()
+        openShare(vm)
+        vm.openSearch()
+        vm.setSearchRecursive(true)
+        assertTrue(vm.state.value.visibleItems.isEmpty())
+        assertFalse(server.requests.any { it.endsWith("/search") })
+
+        vm.setSearchQuery("B")
+        val found = vm.await { it.search?.isLoading == false && it.search.results.isNotEmpty() }
+        assertEquals(listOf("/share/docs/b.txt", "/share/docs/deep/b-notes.txt"), found.visibleItems.map { it.path })
+        // Debounced: one request for the query, none for the empty query before it.
+        assertEquals(1, server.requests.count { it.endsWith("/search") })
+
+        // Results can be selected like folder items.
+        vm.toggleSelection(found.visibleItems.last())
+        assertEquals(listOf("b-notes.txt"), vm.state.value.selectedEntries.map { it.name })
+        vm.clearSelection()
+
+        // Opening a folder from the results navigates there and closes search.
+        vm.setSearchQuery("deep")
+        val deep = vm.await { s -> s.search?.results?.map { it.name } == listOf("deep") }
+        vm.openEntry(deep.visibleItems.single())
+        val opened = vm.await { it.folder?.path == "/share/docs/deep" && it.folder.isLoading.not() }
+        assertNull(opened.search)
+        assertEquals(listOf("/share"), opened.history)
+
+        // Back to local filtering.
+        vm.openSearch()
+        vm.setSearchQuery("NOTES")
+        vm.setSearchRecursive(false)
+        assertEquals(listOf("b-notes.txt"), vm.state.value.visibleItems.map { it.name })
+        assertTrue(vm.state.value.search!!.results.isEmpty())
+    }
+
+    @Test
+    fun recursiveSearchNeedsServerSupport() = runTest {
+        val old = FakeLunarServer(features = emptySet()).file("/share/a.txt")
+        val vm = viewModel(fake = old)
+        openShare(vm)
+        vm.openSearch()
+        vm.setSearchRecursive(true)
+        assertFalse(vm.state.value.search!!.recursive)
     }
 
     @Test

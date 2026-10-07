@@ -181,6 +181,10 @@ async fn root_info_and_unknown_routes() {
     let info = s.get("/api/info", None).await.json();
     assert_eq!(info["api_version"], 1);
     assert_eq!(info["auth_required"], true);
+    assert!(info["features"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("search")));
     assert_eq!(info["os_type"], std::env::consts::OS);
     assert!(info["name"].is_string());
     assert!(info.get("device_name").is_none());
@@ -833,4 +837,68 @@ async fn permissions_combine_user_and_root() {
         "PERMISSION_DENIED"
     );
     assert!(readonly.join("info.txt").exists());
+}
+
+// ---------- search ----------
+
+#[tokio::test]
+async fn search_finds_nested_matches() {
+    let s = server(true);
+    let token = s.token("reader").await;
+    let share = s.share();
+    fs::create_dir_all(share.join("photos/2024")).unwrap();
+    fs::write(share.join("Holiday.txt"), "").unwrap();
+    fs::write(share.join("photos/2024/holiday-beach.jpg"), "").unwrap();
+    fs::write(share.join(".holiday-draft"), "").unwrap();
+
+    let base = format!("/api/v1/fs/search?path={}&query=HOLIDAY", enc(&p(&share)));
+    let res = s.get(&base, Some(&token)).await;
+    assert_eq!(res.status, StatusCode::OK);
+    let body = res.json();
+    let names: Vec<&str> = body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        [".holiday-draft", "Holiday.txt", "holiday-beach.jpg"]
+    );
+    assert_eq!(body["truncated"], false);
+    assert_eq!(
+        body["items"][2]["path"],
+        p(&share.join("photos/2024/holiday-beach.jpg"))
+    );
+
+    let res = s
+        .get(&format!("{base}&show_hidden=false&limit=1"), Some(&token))
+        .await
+        .json();
+    assert_eq!(res["items"].as_array().unwrap().len(), 1);
+    assert_eq!(res["items"][0]["name"], "Holiday.txt");
+    assert_eq!(res["truncated"], true);
+}
+
+#[tokio::test]
+async fn search_errors() {
+    let s = server(true);
+    let token = s.token("admin").await;
+    let share = s.share();
+    fs::write(share.join("file.txt"), "").unwrap();
+    let url = |path: &Path, q: &str| format!("/api/v1/fs/search?path={}&query={q}", enc(&p(path)));
+
+    let res = s.get(&url(&share, "%20"), Some(&token)).await;
+    assert_eq!(res.error_code(), "BAD_REQUEST");
+    let res = s
+        .get(&url(&share.join("file.txt"), "x"), Some(&token))
+        .await;
+    assert_eq!(res.error_code(), "NOT_A_DIRECTORY");
+    let res = s.get(&url(&s.base, "outside"), Some(&token)).await;
+    assert_eq!(res.error_code(), "PATH_OUTSIDE_ROOTS");
+    let nobody = s.token("nobody").await;
+    let res = s.get(&url(&share, "file"), Some(&nobody)).await;
+    assert_eq!(res.error_code(), "PERMISSION_DENIED");
+    let res = s.get(&url(&share, "file"), None).await;
+    assert_eq!(res.error_code(), "UNAUTHENTICATED");
 }

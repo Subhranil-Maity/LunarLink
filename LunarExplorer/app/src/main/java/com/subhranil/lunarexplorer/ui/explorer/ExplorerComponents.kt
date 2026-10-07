@@ -84,10 +84,12 @@ fun EntryRow(
     onLongClick: () -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Where the entry is, relative to the folder being searched. Only set for search results. */
+    location: String? = null,
 ) {
     val modified = formatModified(entry.modified)
-    val supporting = if (entry.isDirLike) modified else listOf(formatBytes(entry.size), modified)
-        .filter { it.isNotEmpty() }.joinToString(" · ")
+    val details = if (entry.isDirLike) listOf(modified) else listOf(formatBytes(entry.size), modified)
+    val supporting = (listOfNotNull(location) + details).filter { it.isNotEmpty() }.joinToString(" · ")
     ListItem(
         modifier = modifier
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)

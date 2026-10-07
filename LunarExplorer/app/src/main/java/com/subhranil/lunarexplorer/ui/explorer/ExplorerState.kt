@@ -45,6 +45,19 @@ sealed interface ExplorerDialog {
 
 data class Progress(val done: Int, val total: Int)
 
+data class SearchState(
+    val query: String = "",
+    /** `false` filters the loaded items of this folder; `true` asks the server to search all subfolders too. */
+    val recursive: Boolean = false,
+    val results: List<Entry> = emptyList(),
+    val isLoading: Boolean = false,
+    /** The server stopped early, so there may be more matches than shown. */
+    val truncated: Boolean = false,
+    val error: UiText? = null,
+) {
+    val isServerSearch: Boolean get() = recursive && query.isNotBlank()
+}
+
 data class ExplorerUiState(
     val serverName: String = "",
     val connection: Connection = Connection.Connecting,
@@ -57,8 +70,10 @@ data class ExplorerUiState(
     val sortKey: SortKey = SortKey.NAME,
     val sortOrder: SortOrder = SortOrder.ASC,
     val showHidden: Boolean = true,
+    /** Optional features of the connected server, see [com.subhranil.lunarexplorer.data.api.ServerFeature]. */
+    val serverFeatures: Set<String> = emptySet(),
     /** `null` when search is closed. */
-    val searchQuery: String? = null,
+    val search: SearchState? = null,
     val selection: Set<String> = emptySet(),
     val clipboard: Clipboard? = null,
     val dialog: ExplorerDialog? = null,
@@ -70,13 +85,20 @@ data class ExplorerUiState(
     val isSelecting: Boolean get() = selection.isNotEmpty()
     val canGoBack: Boolean get() = folder != null
 
+    val searchQuery: String? get() = search?.query
+
     val visibleItems: List<Entry>
         get() {
+            val search = search
+            // Subfolder search only ever shows the server's results (none until something is typed).
+            if (search?.recursive == true) return search.results
             val items = folder?.items.orEmpty()
-            val query = searchQuery?.trim().orEmpty()
+            val query = search?.query?.trim().orEmpty()
             return if (query.isEmpty()) items else items.filter { it.name.contains(query, ignoreCase = true) }
         }
 
     val selectedEntries: List<Entry>
-        get() = folder?.items.orEmpty().filter { it.path in selection }
+        get() = (folder?.items.orEmpty() + search?.results.orEmpty())
+            .distinctBy { it.path }
+            .filter { it.path in selection }
 }

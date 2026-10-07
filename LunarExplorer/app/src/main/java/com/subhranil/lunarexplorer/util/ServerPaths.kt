@@ -64,6 +64,14 @@ object ServerPaths {
         return p.startsWith(prefix)
     }
 
+    /** [path] relative to [base] using the server's separators, or "" when they're the same. [path] must be inside [base]. */
+    fun relative(path: String, base: String): String {
+        val p = trim(path)
+        val b = trim(base)
+        if (p == b || !isSameOrInside(p, b)) return ""
+        return p.substring(b.length).trimStart('/', '\\')
+    }
+
     /** Breadcrumbs from [rootPath] (shown as [rootName]) down to [path]. */
     fun crumbs(rootPath: String, rootName: String, path: String): List<Crumb> {
         val root = trim(rootPath)

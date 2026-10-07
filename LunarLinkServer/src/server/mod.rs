@@ -23,6 +23,7 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route("/roots", get(api::fs::roots))
         .route("/stat", get(api::fs::stat))
         .route("/list", get(api::fs::list))
+        .route("/search", get(api::fs::search))
         .route("/download", get(api::download::download))
         .route("/file", post(api::fs::create_file))
         .route("/dir", post(api::fs::create_dir))

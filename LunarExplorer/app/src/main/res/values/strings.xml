@@ -71,6 +71,12 @@
     <string name="explorer_load_failed">Couldn\'t load this folder</string>
     <string name="explorer_search">Search this folder</string>
     <string name="explorer_close_search">Close search</string>
+    <string name="explorer_search_subfolders">Search this folder and subfolders</string>
+    <string name="explorer_search_scope_folder">This folder</string>
+    <string name="explorer_search_scope_subfolders">Include subfolders</string>
+    <string name="explorer_search_hint">Type a name to search every subfolder</string>
+    <string name="explorer_search_failed">Search failed</string>
+    <string name="explorer_search_truncated">Showing the first %1$d results. Type more of the name to narrow it down.</string>
     <string name="explorer_sort">Sort</string>
     <string name="explorer_sort_name">Name</string>
     <string name="explorer_sort_modified">Date modified</string>

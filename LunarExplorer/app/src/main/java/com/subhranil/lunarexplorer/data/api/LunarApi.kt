@@ -86,6 +86,17 @@ class LunarApi(private val client: HttpClient, baseUrl: String) {
         }
     }
 
+    suspend fun search(token: String?, path: String, query: String, showHidden: Boolean, limit: Int? = null): ApiResult<SearchResult> =
+        call {
+            client.get("$baseUrl/api/v1/fs/search") {
+                auth(token)
+                parameter("path", path)
+                parameter("query", query)
+                parameter("show_hidden", showHidden)
+                limit?.let { parameter("limit", it) }
+            }
+        }
+
     suspend fun createFile(token: String?, path: String): ApiResult<Entry> = call {
         client.post("$baseUrl/api/v1/fs/file") { auth(token); json(PathBody(path)) }
     }

@@ -32,6 +32,8 @@ class FakeLunarServer(
     val password: String = "pw",
     val authRequired: Boolean = true,
     val rootPath: String = "/share",
+    /** Optional features reported by `/api/info`. */
+    val features: Set<String> = setOf("search"),
 ) {
     /** Paths that exist; folders end up as keys with `true`. */
     val nodes = sortedMapOf(rootPath to true)
@@ -144,7 +146,8 @@ class FakeLunarServer(
         requests += "${request.method.value} $path"
         when (path) {
             "/api/info" -> return json(
-                """{"name":"Fake","os_type":"linux","os_version":"1","server_version":"0.2.0","api_version":1,"auth_required":$authRequired}"""
+                """{"name":"Fake","os_type":"linux","os_version":"1","server_version":"0.2.0","api_version":1,"auth_required":$authRequired,""" +
+                    """"features":[${features.joinToString(",") { "\"$it\"" }}]}"""
             )
             "/api/auth/login" -> {
                 val b = body(request)
@@ -176,6 +179,19 @@ class FakeLunarServer(
                 json(entryJson(target))
             }
             "/api/v1/fs/download" -> download(request)
+            "/api/v1/fs/search" -> {
+                if ("search" !in features) return error(HttpStatusCode.NotFound, "NOT_FOUND")
+                val dir = request.url.parameters["path"]!!
+                if (dir !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")
+                val query = request.url.parameters["query"]!!.trim().lowercase()
+                val showHidden = request.url.parameters["show_hidden"] != "false"
+                val matches = nodes.keys
+                    .filter { it.startsWith("$dir/") }
+                    .filter { p -> showHidden || p.removePrefix(dir).split('/').none { it.startsWith(".") } }
+                    .filter { it.substringAfterLast('/').lowercase().contains(query) }
+                    .sortedBy { p -> p.count { it == '/' } }
+                json("""{"items":[${matches.joinToString(",") { entryJson(it) }}],"truncated":false}""")
+            }
             "/api/v1/fs/list" -> {
                 val dir = request.url.parameters["path"]!!
                 if (dir !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")

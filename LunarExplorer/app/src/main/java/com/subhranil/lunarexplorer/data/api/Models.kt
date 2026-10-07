@@ -84,6 +84,9 @@ data class Listing(
 )
 
 @Serializable
+data class SearchResult(val items: List<Entry>, val truncated: Boolean)
+
+@Serializable
 data class ServerInfo(
     val name: String,
     @SerialName("os_type") val osType: String,
@@ -91,7 +94,16 @@ data class ServerInfo(
     @SerialName("server_version") val serverVersion: String,
     @SerialName("api_version") val apiVersion: Int,
     @SerialName("auth_required") val authRequired: Boolean,
-)
+    /** Optional server capabilities, see [ServerFeature]. Older servers send none. */
+    val features: Set<String> = emptySet(),
+) {
+    fun supports(feature: String) = feature in features
+}
+
+/** Names of optional capabilities listed in [ServerInfo.features]. */
+object ServerFeature {
+    const val SEARCH = "search"
+}
 
 @Serializable
 data class UserInfo(val username: String, val permissions: Set<Permission>)

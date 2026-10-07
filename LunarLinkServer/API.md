@@ -18,7 +18,7 @@
 5. [Endpoints](#endpoints)
    - [Public](#public): `GET /`, `GET /api/info`
    - [Auth](#auth): `POST /api/auth/login`, `GET /api/auth/me`
-   - [Filesystem](#filesystem): `roots`, `stat`, `list`, `download`, `file`, `dir`, `copy`, `move`, `delete`
+   - [Filesystem](#filesystem): `roots`, `stat`, `list`, `search`, `download`, `file`, `dir`, `copy`, `move`, `delete`
 6. [Configuration reference](#configuration-reference)
 
 ---
@@ -131,7 +131,7 @@ user has no `read` on is hidden from `GET /roots` and inaccessible.
 | Endpoint | Required |
 |---|---|
 | `roots` | none (only roots with `read` are returned) |
-| `stat`, `list`, `download` | `read` |
+| `stat`, `list`, `search`, `download` | `read` |
 | `file`, `dir` | `write` on the parent's root |
 | `copy` | `read` on the source root, `write` on the destination root |
 | `move` (same parent folder, i.e. rename) | `write` |
@@ -219,12 +219,15 @@ Basic server details shown before connecting. No auth required.
   "os_version": "rolling",
   "server_version": "0.2.0",
   "api_version": 1,
-  "auth_required": true
+  "auth_required": true,
+  "features": ["search"]
 }
 ```
 
 - `name` is `server.display_name` if set, otherwise the machine hostname. It is never the OS user name.
 - `os_type` is one of `linux`, `windows`, `macos`, etc.
+- `features` lists optional capabilities, so clients can hide what an older server doesn't support.
+  Unknown names should be ignored. Current values: `search` (`GET /api/v1/fs/search`).
 
 ### Auth
 
@@ -313,6 +316,32 @@ Response `200`:
 wasn't given.
 
 Errors: `NOT_FOUND`, `NOT_A_DIRECTORY`, `PATH_OUTSIDE_ROOTS`, `PERMISSION_DENIED`.
+
+#### `GET /api/v1/fs/search?path=<dir>&query=<name>`  🔒
+
+Finds files and folders below `path` (at any depth) whose name contains `query`, ignoring case.
+
+| Query | Default | Notes |
+|---|---|---|
+| `path` | required | Folder to search in. Must be a folder |
+| `query` | required | Text to look for in names. Leading and trailing spaces are ignored; empty is `400 BAD_REQUEST` |
+| `limit` | `200` | Maximum results, clamped to `1..=1000` |
+| `show_hidden` | `true` | `false` skips hidden entries and does not search inside hidden folders |
+
+- The search is breadth-first: matches closer to `path` come first. Within a folder, names are in
+  natural order.
+- Symlinks are listed when their name matches but are never followed.
+- Nested roots the user can't read are not searched.
+- The search stops after `limit` results or about 10 seconds, whichever comes first, and then sets
+  `truncated: true`. It also stops when the client disconnects.
+
+Response `200`:
+
+```json
+{ "items": [ /* Entry */ ], "truncated": false }
+```
+
+Errors: `BAD_REQUEST`, `NOT_FOUND`, `NOT_A_DIRECTORY`, `PATH_OUTSIDE_ROOTS`, `PERMISSION_DENIED`.
 
 #### `GET /api/v1/fs/download?path=<file>`  🔒
 

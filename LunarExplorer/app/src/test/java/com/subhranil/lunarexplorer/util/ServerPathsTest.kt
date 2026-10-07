@@ -76,4 +76,12 @@ class ServerPathsTest {
         assertEquals("folder (1)", uniqueName("folder", setOf("folder")))
         assertEquals(".bashrc (1)", uniqueName(".bashrc", setOf(".bashrc")))
     }
+
+    @Test
+    fun relativePaths() {
+        assertEquals("docs/deep", ServerPaths.relative("/share/docs/deep", "/share"))
+        assertEquals("", ServerPaths.relative("/share/", "/share"))
+        assertEquals("", ServerPaths.relative("/other", "/share"))
+        assertEquals("Users\\me", ServerPaths.relative("C:\\Users\\me", "C:\\"))
+    }
 }

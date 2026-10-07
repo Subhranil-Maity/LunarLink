@@ -9,6 +9,7 @@ import com.subhranil.lunarexplorer.data.api.Listing
 import com.subhranil.lunarexplorer.data.api.LunarApi
 import com.subhranil.lunarexplorer.data.api.LunarError
 import com.subhranil.lunarexplorer.data.api.Root
+import com.subhranil.lunarexplorer.data.api.SearchResult
 import com.subhranil.lunarexplorer.data.api.ServerInfo
 import com.subhranil.lunarexplorer.data.api.UserInfo
 import com.subhranil.lunarexplorer.data.api.hasCode
@@ -43,6 +44,9 @@ class ServerSession private constructor(
     suspend fun list(path: String, query: ListQuery): ApiResult<Listing> = authed { api.list(it, path, query) }
 
     suspend fun stat(path: String, follow: Boolean = false): ApiResult<Entry> = authed { api.stat(it, path, follow) }
+
+    suspend fun search(path: String, query: String, showHidden: Boolean): ApiResult<SearchResult> =
+        authed { api.search(it, path, query, showHidden) }
 
     suspend fun createFile(path: String): ApiResult<Entry> = authed { api.createFile(it, path) }
 

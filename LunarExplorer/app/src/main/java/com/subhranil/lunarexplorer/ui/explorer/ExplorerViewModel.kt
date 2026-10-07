@@ -11,6 +11,7 @@ import com.subhranil.lunarexplorer.data.api.ListQuery
 import com.subhranil.lunarexplorer.data.api.LunarError
 import com.subhranil.lunarexplorer.data.api.Permission
 import com.subhranil.lunarexplorer.data.api.Root
+import com.subhranil.lunarexplorer.data.api.ServerFeature
 import com.subhranil.lunarexplorer.data.api.SortKey
 import com.subhranil.lunarexplorer.data.api.SortOrder
 import com.subhranil.lunarexplorer.data.api.errorOrNull
@@ -28,6 +29,7 @@ import com.subhranil.lunarexplorer.util.uniqueName
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +54,7 @@ class ExplorerViewModel(
     private var session: ServerSession? = null
     private var loadJob: Job? = null
     private var operationJob: Job? = null
+    private var searchJob: Job? = null
     private var pendingConflict: CompletableDeferred<Pair<ConflictAction, Boolean>>? = null
 
     init {
@@ -84,7 +87,7 @@ class ExplorerViewModel(
             is ApiResult.Success -> r.value
         }
         session = connected
-        _state.update { it.copy(serverName = connected.info.name) }
+        _state.update { it.copy(serverName = connected.info.name, serverFeatures = connected.info.features) }
         when (val r = connected.roots()) {
             is ApiResult.Failure -> _state.update { it.copy(connection = Connection.Failed(r.error.toUiText())) }
             is ApiResult.Success -> {
@@ -119,7 +122,8 @@ class ExplorerViewModel(
 
     fun showLocations() {
         loadJob?.cancel()
-        _state.update { it.copy(folder = null, root = null, history = emptyList(), searchQuery = null, selection = emptySet()) }
+        searchJob?.cancel()
+        _state.update { it.copy(folder = null, root = null, history = emptyList(), search = null, selection = emptySet()) }
     }
 
     /** Goes to the previously visited folder, or to the locations list. Returns false if there's nowhere to go. */
@@ -138,13 +142,14 @@ class ExplorerViewModel(
     }
 
     private fun showFolder(path: String, pushHistory: Boolean) {
+        searchJob?.cancel()
         _state.update {
             val history = if (pushHistory && it.folder != null) it.history + it.folder.path else it.history
             it.copy(
                 folder = FolderState(path),
                 history = history,
                 root = rootFor(path) ?: it.root,
-                searchQuery = null,
+                search = null,
                 selection = emptySet(),
             )
         }
@@ -161,6 +166,7 @@ class ExplorerViewModel(
         val folder = _state.value.folder ?: return
         _state.update { it.copy(folder = folder.copy(isRefreshing = true)) }
         load(folder.path)
+        runServerSearch()
     }
 
     fun loadMore() {
@@ -219,6 +225,7 @@ class ExplorerViewModel(
     fun setShowHidden(show: Boolean) {
         _state.update { it.copy(showHidden = show) }
         reloadFromStart()
+        runServerSearch()
     }
 
     private fun reloadFromStart() {
@@ -229,11 +236,56 @@ class ExplorerViewModel(
 
     // ---------- search & selection ----------
 
-    fun openSearch() = _state.update { it.copy(searchQuery = "", selection = emptySet()) }
+    fun openSearch() = _state.update { it.copy(search = SearchState(), selection = emptySet()) }
 
-    fun setSearchQuery(query: String) = _state.update { it.copy(searchQuery = query) }
+    fun setSearchQuery(query: String) {
+        _state.update { s -> s.copy(search = s.search?.copy(query = query)) }
+        runServerSearch(debounce = true)
+    }
 
-    fun closeSearch() = _state.update { it.copy(searchQuery = null) }
+    /** Switches between filtering this folder and searching its subfolders on the server. */
+    fun setSearchRecursive(recursive: Boolean) {
+        if (recursive && ServerFeature.SEARCH !in _state.value.serverFeatures) return
+        _state.update { s -> s.copy(search = s.search?.copy(recursive = recursive), selection = emptySet()) }
+        runServerSearch()
+    }
+
+    fun closeSearch() {
+        searchJob?.cancel()
+        _state.update { it.copy(search = null) }
+    }
+
+    /** (Re)starts the server search for the current query, or clears its results when there's nothing to search. */
+    private fun runServerSearch(debounce: Boolean = false) {
+        searchJob?.cancel()
+        val s = _state.value
+        val search = s.search ?: return
+        val folder = s.folder ?: return
+        val session = session ?: return
+        if (!search.isServerSearch) {
+            _state.update { it.copy(search = it.search?.copy(results = emptyList(), isLoading = false, truncated = false, error = null)) }
+            return
+        }
+        _state.update { it.copy(search = it.search?.copy(isLoading = true, error = null)) }
+        searchJob = viewModelScope.launch {
+            if (debounce) delay(SEARCH_DEBOUNCE_MS)
+            val query = search.query.trim()
+            val result = session.search(folder.path, query, s.showHidden)
+            _state.update { current ->
+                val latest = current.search?.takeIf { it.isServerSearch && it.query.trim() == query } ?: return@update current
+                val updated = when (result) {
+                    is ApiResult.Success -> latest.copy(
+                        results = result.value.items,
+                        truncated = result.value.truncated,
+                        isLoading = false,
+                        error = null,
+                    )
+                    is ApiResult.Failure -> latest.copy(results = emptyList(), isLoading = false, error = result.error.toUiText())
+                }
+                current.copy(search = updated)
+            }
+        }
+    }
 
     fun toggleSelection(entry: Entry) = _state.update {
         val selection = if (entry.path in it.selection) it.selection - entry.path else it.selection + entry.path
@@ -459,5 +511,6 @@ class ExplorerViewModel(
     private companion object {
         const val PAGE_SIZE = 200
         const val MAX_RENAME_ATTEMPTS = 20
+        const val SEARCH_DEBOUNCE_MS = 300L
     }
 }

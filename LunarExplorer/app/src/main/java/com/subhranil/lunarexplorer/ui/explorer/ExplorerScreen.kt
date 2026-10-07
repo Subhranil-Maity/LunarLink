@@ -2,6 +2,7 @@ package com.subhranil.lunarexplorer.ui.explorer
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -60,6 +62,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -70,6 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
 import com.subhranil.lunarexplorer.R
 import com.subhranil.lunarexplorer.data.api.Entry
+import com.subhranil.lunarexplorer.data.api.ServerFeature
 import com.subhranil.lunarexplorer.ui.asString
 import com.subhranil.lunarexplorer.ui.components.LoadingView
 import com.subhranil.lunarexplorer.ui.components.MessageView
@@ -118,7 +122,7 @@ fun ExplorerScreen(
         }
     }
     // 2. Search, then 3. selection.
-    BackHandler(enabled = state.searchQuery != null) { viewModel.closeSearch() }
+    BackHandler(enabled = state.search != null) { viewModel.closeSearch() }
     BackHandler(enabled = state.isSelecting) { viewModel.clearSelection() }
 
     when (val connection = state.connection) {
@@ -193,7 +197,11 @@ private fun ReadyContent(
             Column {
                 when {
                     state.isSelecting -> SelectionTopBar(state, viewModel, onDownload)
-                    state.searchQuery != null -> SearchTopBar(state.searchQuery, viewModel)
+                    state.search != null -> SearchTopBar(
+                        search = state.search,
+                        canSearchSubfolders = ServerFeature.SEARCH in state.serverFeatures,
+                        viewModel = viewModel,
+                    )
                     else -> MainTopBar(state, viewModel, activeDownloads, onExit, onOpenDownloads)
                 }
                 if (folder != null && state.root != null) {
@@ -350,9 +358,11 @@ private fun MainTopBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchTopBar(query: String, viewModel: ExplorerViewModel) {
+private fun SearchTopBar(search: SearchState, canSearchSubfolders: Boolean, viewModel: ExplorerViewModel) {
+    val query = search.query
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
+    Column {
     TopAppBar(
         navigationIcon = {
             IconButton(onClick = viewModel::closeSearch) {
@@ -363,7 +373,13 @@ private fun SearchTopBar(query: String, viewModel: ExplorerViewModel) {
             TextField(
                 value = query,
                 onValueChange = viewModel::setSearchQuery,
-                placeholder = { Text(stringResource(R.string.explorer_search)) },
+                placeholder = {
+                    Text(
+                        stringResource(if (search.recursive) R.string.explorer_search_subfolders else R.string.explorer_search),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 singleLine = true,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -384,6 +400,24 @@ private fun SearchTopBar(query: String, viewModel: ExplorerViewModel) {
             }
         },
     )
+    if (canSearchSubfolders) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = !search.recursive,
+                onClick = { viewModel.setSearchRecursive(false) },
+                label = { Text(stringResource(R.string.explorer_search_scope_folder)) },
+            )
+            FilterChip(
+                selected = search.recursive,
+                onClick = { viewModel.setSearchRecursive(true) },
+                label = { Text(stringResource(R.string.explorer_search_scope_subfolders)) },
+            )
+        }
+    }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -459,6 +493,7 @@ private fun FolderPane(
     modifier: Modifier = Modifier,
 ) {
     val items = state.visibleItems
+    val search = state.search
     val listState = rememberLazyListState()
     val itemCount by rememberUpdatedState(items.size)
 
@@ -477,6 +512,19 @@ private fun FolderPane(
             folder.isLoading && folder.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
+            search?.isServerSearch == true && search.isLoading && items.isEmpty() ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            search?.isServerSearch == true && search.error != null -> MessageView(
+                title = stringResource(R.string.explorer_search_failed),
+                body = search.error.asString(),
+                icon = painterResource(R.drawable.ic_cloud_off),
+                isError = true,
+                action = { Button(onClick = viewModel::refresh) { Text(stringResource(R.string.action_retry)) } },
+            )
+            search?.recursive == true && search.query.isBlank() -> MessageView(
+                title = stringResource(R.string.explorer_search_hint),
+                icon = rememberVectorPainter(Icons.Default.Search),
+            )
             folder.error != null -> MessageView(
                 title = stringResource(R.string.explorer_load_failed),
                 body = folder.error.asString(),
@@ -485,8 +533,8 @@ private fun FolderPane(
                 action = { Button(onClick = viewModel::refresh) { Text(stringResource(R.string.action_retry)) } },
             )
             items.isEmpty() -> MessageView(
-                title = if (state.searchQuery.isNullOrBlank()) stringResource(R.string.explorer_empty_folder)
-                else stringResource(R.string.explorer_no_matches, state.searchQuery),
+                title = if (search == null || search.query.isBlank()) stringResource(R.string.explorer_empty_folder)
+                else stringResource(R.string.explorer_no_matches, search.query.trim()),
                 icon = painterResource(R.drawable.folder_icon),
             )
             else -> LazyColumn(
@@ -503,7 +551,22 @@ private fun FolderPane(
                         onLongClick = { viewModel.toggleSelection(entry) },
                         onMore = { viewModel.showDialog(ExplorerDialog.Actions(entry)) },
                         modifier = Modifier.animateItem(),
+                        location = if (search?.isServerSearch == true) {
+                            ServerPaths.parent(entry.path)?.let { ServerPaths.relative(it, folder.path) }?.ifEmpty { null }
+                        } else {
+                            null
+                        },
                     )
+                }
+                if (search?.isServerSearch == true && search.truncated) {
+                    item {
+                        Text(
+                            stringResource(R.string.explorer_search_truncated, items.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        )
+                    }
                 }
                 if (folder.isLoadingMore) {
                     item {

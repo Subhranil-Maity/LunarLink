@@ -15,8 +15,11 @@ Core capabilities include:
 - Mount and drive discovery
 - Folder browsing and metadata lookup
 - File and folder operations (create, rename, move, copy, delete)
-- File reading and chunked downloads
-- Download tracking in the Android app
+- Big copies and moves run in the background with live progress and Cancel
+- Search by name in a folder and all its subfolders
+- Image previews (thumbnails) in a list or grid view
+- Resumable downloads with progress notifications in the Android app
+- Servers on the same network show up in the app automatically (mDNS)
 
 ## Repository Structure
 
@@ -39,9 +42,10 @@ On first run, the server creates `config.toml` if it is missing.
 
 Edit `LunarLinkServer/config.toml` to set:
 
-- Host and port
+- Host and port, and whether the server announces itself on the local network
 - Users and passwords
 - Mount points
+- Thumbnail cache
 
 ### 3. Run the Android app
 
@@ -54,21 +58,12 @@ Or open `LunarExplorer` in Android Studio and run the app on a device/emulator.
 
 ## API Overview
 
-Main server routes:
+Main server routes (full reference: [`LunarLinkServer/API.md`](LunarLinkServer/API.md)):
 
-- `POST /api/auth/login`
-- `GET /api/get_info`
-- `GET /api/v1/fs/mounts`
-- `GET /api/v1/fs/metadata`
-- `GET /api/v1/fs/get_folder_content`
-- `GET /api/v1/fs/read_full_file`
-- `GET /api/v1/fs/download_file`
-- `PATCH /api/v1/fs/rename`
-- `PATCH /api/v1/fs/move`
-- `POST /api/v1/fs/copy`
-- `DELETE /api/v1/fs/delete`
-- `POST /api/v1/fs/touch`
-- `POST /api/v1/fs/mkdir`
+- `GET /api/info`, `POST /api/auth/login`, `GET /api/auth/me`
+- `GET /api/v1/fs/roots`, `stat`, `list`, `search`, `download`, `thumbnail`
+- `POST /api/v1/fs/file`, `dir`, `copy`, `move`, `delete`
+- `POST /api/v1/jobs/copy`, `POST /api/v1/jobs/move`, `GET /api/v1/jobs/{id}`, `POST /api/v1/jobs/{id}/cancel`
 
 ## Technology Stack
 

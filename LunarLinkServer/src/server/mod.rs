@@ -1,4 +1,5 @@
 pub mod api;
+pub mod discovery;
 pub mod error;
 pub mod extract;
 pub mod middleware;
@@ -107,13 +108,37 @@ pub async fn run_server(config: LunarConfig) -> anyhow::Result<()> {
         print_connect_qr(&state.config.server.host, state.config.server.port);
     }
 
-    axum::serve(listener, build_app(state))
+    let advertisement = if state.config.server.discoverable {
+        let name = api::info::display_name(&state.config);
+        let (host, port, auth) = (
+            state.config.server.host.clone(),
+            state.config.server.port,
+            state.config.auth.enabled,
+        );
+        match discovery::Advertisement::start(&name, &host, port, auth) {
+            Ok(advertisement) => advertisement,
+            Err(e) => {
+                tracing::warn!(error = %e, "could not announce the server on the local network");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let served = axum::serve(listener, build_app(state))
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
             tracing::info!("shutting down");
         })
         .await
-        .context("server error")
+        .context("server error");
+    if let Some(advertisement) = advertisement {
+        tokio::task::spawn_blocking(move || advertisement.stop())
+            .await
+            .ok();
+    }
+    served
 }
 
 fn print_connect_qr(host: &str, port: u16) {

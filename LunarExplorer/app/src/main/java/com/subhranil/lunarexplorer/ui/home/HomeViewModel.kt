@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.subhranil.lunarexplorer.R
 import com.subhranil.lunarexplorer.data.api.ApiResult
 import com.subhranil.lunarexplorer.data.api.ServerInfo
+import com.subhranil.lunarexplorer.data.discovery.DiscoveredServer
+import com.subhranil.lunarexplorer.data.discovery.ServerDiscovery
 import com.subhranil.lunarexplorer.data.servers.DuplicateServerException
 import com.subhranil.lunarexplorer.data.servers.SavedServer
 import com.subhranil.lunarexplorer.data.servers.ServerDraft
@@ -60,6 +62,8 @@ data class EditorState(
 data class HomeUiState(
     val isLoaded: Boolean = false,
     val servers: List<ServerItem> = emptyList(),
+    /** Servers announced on the local network that aren't saved yet. */
+    val nearby: List<DiscoveredServer> = emptyList(),
     val isRefreshing: Boolean = false,
     val editor: EditorState? = null,
     val pendingDelete: SavedServer? = null,
@@ -74,6 +78,7 @@ private data class Overlay(
 class HomeViewModel(
     private val repository: ServerRepository,
     private val probe: ServerProbe,
+    discovery: ServerDiscovery,
 ) : ViewModel() {
 
     private val statuses = MutableStateFlow<Map<String, ServerStatus>>(emptyMap())
@@ -81,13 +86,16 @@ class HomeViewModel(
     private val _messages = Channel<UiText>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
 
+    // Discovery runs only while the Home screen collects the state (plus 5 s), so it costs nothing elsewhere.
     val state: StateFlow<HomeUiState> =
-        combine(repository.servers, statuses, overlay) { servers, statusMap, o ->
+        combine(repository.servers, statuses, overlay, discovery.servers()) { servers, statusMap, o, found ->
+            val saved = servers.map { it.baseUrl }.toSet()
             HomeUiState(
                 isLoaded = true,
                 servers = servers
                     .sortedByDescending { it.lastConnectedAt ?: 0 }
                     .map { ServerItem(it, statusMap[it.id] ?: ServerStatus.CHECKING) },
+                nearby = found.filter { it.baseUrl != null && it.baseUrl !in saved },
                 isRefreshing = o.isRefreshing,
                 editor = o.editor,
                 pendingDelete = o.pendingDelete,
@@ -128,6 +136,11 @@ class HomeViewModel(
     // ---------- editor ----------
 
     fun openAddServer() = overlay.update { it.copy(editor = EditorState()) }
+
+    /** Opens the editor with a nearby server's address filled in. */
+    fun addNearby(server: DiscoveredServer) = overlay.update {
+        it.copy(editor = EditorState(host = server.host, port = server.port.toString()))
+    }
 
     fun openEditServer(server: SavedServer) {
         viewModelScope.launch {

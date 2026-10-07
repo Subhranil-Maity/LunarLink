@@ -18,6 +18,8 @@ import io.ktor.client.engine.mock.MockEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.subhranil.lunarexplorer.data.discovery.DiscoveredServer
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -38,10 +40,35 @@ class HomeViewModelTest {
     private val offlineApi = LunarApi(createHttpClient(MockEngine { throw ConnectException() }), "http://down")
     private val probe = ServerProbe { url -> if ("down" in url) offlineApi else server.api() }
 
-    private fun viewModel() = HomeViewModel(repo, probe)
+    private val discovered = MutableStateFlow<List<DiscoveredServer>>(emptyList())
+    private fun viewModel() = HomeViewModel(repo, probe) { discovered }
 
     private suspend fun HomeViewModel.await(predicate: (HomeUiState) -> Boolean) =
         withContext(Dispatchers.Default) { withTimeout(5_000) { state.first(predicate) } }
+
+    @Test
+    fun nearbyServersExceptSavedOnesCanBeAdded() = runTest {
+        repo.add(ServerDraft("Desk", "http://10.0.0.5:1234", "user", "pw", "linux"))
+        val vm = viewModel()
+        assertEquals(0, discovered.subscriptionCount.value)
+        val collector = backgroundScope.launch { vm.state.collect {} }
+
+        discovered.value = listOf(
+            DiscoveredServer("Desk", "10.0.0.5", 1234, authRequired = true, osType = "linux"),
+            DiscoveredServer("Laptop", "10.0.0.6", 1234, authRequired = false, osType = "windows"),
+        )
+        val state = vm.await { it.nearby.isNotEmpty() }
+        assertEquals(listOf("Laptop"), state.nearby.map { it.name })
+        // Searching only runs while the screen observes the state.
+        assertEquals(1, discovered.subscriptionCount.value)
+
+        vm.addNearby(state.nearby.single())
+        val editor = vm.await { it.editor != null }.editor!!
+        assertEquals("10.0.0.6", editor.host)
+        assertEquals("1234", editor.port)
+        assertEquals("http://10.0.0.6:1234", editor.baseUrl)
+        collector.cancel()
+    }
 
     @Test
     fun showsOnlineAndOfflineServers() = runTest {

@@ -1,5 +1,7 @@
 package com.subhranil.lunarexplorer.ui.home
 
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,6 +44,16 @@ import com.subhranil.lunarexplorer.ui.downloads.DownloadsButton
 import com.subhranil.lunarexplorer.ui.resolve
 import org.koin.androidx.compose.koinViewModel
 
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -74,7 +86,7 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            if (state.servers.isNotEmpty()) {
+            if (state.servers.isNotEmpty() || state.nearby.isNotEmpty()) {
                 ExtendedFloatingActionButton(
                     onClick = viewModel::openAddServer,
                     icon = { Icon(Icons.Default.Add, contentDescription = null) },
@@ -93,7 +105,7 @@ fun HomeScreen(
         ) {
             when {
                 !state.isLoaded -> Box(Modifier.fillMaxSize())
-                state.servers.isEmpty() -> MessageView(
+                state.servers.isEmpty() && state.nearby.isEmpty() -> MessageView(
                     title = stringResource(R.string.home_empty_title),
                     body = stringResource(R.string.home_empty_body),
                     icon = painterResource(R.drawable.ic_dns),
@@ -111,6 +123,23 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    if (state.nearby.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "nearby-header") {
+                            SectionTitle(stringResource(R.string.home_nearby))
+                        }
+                        items(state.nearby, key = { "nearby:${it.host}:${it.port}" }) { server ->
+                            NearbyServerCard(
+                                server = server,
+                                onAdd = { viewModel.addNearby(server) },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
+                        if (state.servers.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }, key = "saved-header") {
+                                SectionTitle(stringResource(R.string.home_saved))
+                            }
+                        }
+                    }
                     items(state.servers, key = { it.server.id }) { item ->
                         ServerCard(
                             item = item,

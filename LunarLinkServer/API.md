@@ -20,6 +20,7 @@
    - [Auth](#auth): `POST /api/auth/login`, `GET /api/auth/me`
    - [Filesystem](#filesystem): `roots`, `stat`, `list`, `search`, `download`, `thumbnail`, `file`, `dir`, `copy`, `move`, `delete`
    - [Jobs](#jobs): background `copy` and `move` with progress and cancel
+6. [Finding servers on the local network](#finding-servers-on-the-local-network)
 6. [Configuration reference](#configuration-reference)
 
 ---
@@ -529,6 +530,21 @@ a `.lunarpart-` file next to its destination.
 
 ---
 
+## Finding servers on the local network
+
+With `server.discoverable = true` (the default) the server announces itself with mDNS / DNS-SD so apps
+can list it without typing an address:
+
+- Service type `_lunarlink._tcp`, instance name = the `name` from [`GET /api/info`](#get-apiinfo).
+- TXT records: `api` (API version), `auth` (`1` or `0`), `os` (`os_type`) and `ver` (server version).
+- When `host` is `0.0.0.0` or `::`, every LAN address is announced. A specific address announces only
+  that one. A loopback-only server is not announced.
+- The announcement is withdrawn when the server shuts down.
+
+Test it on Linux with `avahi-browse -rt _lunarlink._tcp`.
+
+---
+
 ## Other behaviour
 
 - **CORS:** any origin. Allowed methods: `GET`, `POST`, `OPTIONS`. Allowed headers: `Authorization`,
@@ -560,6 +576,7 @@ port = 1234
 max_concurrent_requests = 100
 # display_name = "My Desktop"   # optional. Defaults to the hostname
 show_qr = false                 # print a QR code with the server URL at startup
+discoverable = true             # announce on the local network (mDNS) so apps can find it
 
 [auth]
 enabled = true

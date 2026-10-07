@@ -1,5 +1,8 @@
 package com.subhranil.lunarexplorer.ui.home
 
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.FilledTonalButton
+import com.subhranil.lunarexplorer.data.discovery.DiscoveredServer
 import android.content.ClipData
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
@@ -82,6 +85,34 @@ fun ServerCard(
                 StatusChip(item.status)
             }
             ServerMenu(baseUrl = server.baseUrl, onEdit = onEdit, onDelete = onDelete)
+        }
+    }
+}
+
+/** A server announced on the local network that isn't saved yet. */
+@Composable
+fun NearbyServerCard(server: DiscoveredServer, onAdd: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedCard(onClick = onAdd, modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OsBadge(server.osType)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(server.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    "${server.host}:${server.port}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.MiddleEllipsis,
+                )
+            }
+            FilledTonalButton(onClick = onAdd) { Text(stringResource(R.string.home_nearby_add)) }
         }
     }
 }

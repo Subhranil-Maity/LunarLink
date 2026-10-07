@@ -20,6 +20,8 @@ import com.subhranil.lunarexplorer.data.download.WorkManagerDownloadScheduler
 import com.subhranil.lunarexplorer.data.servers.KeystorePasswordCipher
 import com.subhranil.lunarexplorer.data.servers.PasswordCipher
 import com.subhranil.lunarexplorer.data.servers.ServerRepository
+import com.subhranil.lunarexplorer.data.discovery.NsdServerDiscovery
+import com.subhranil.lunarexplorer.data.discovery.ServerDiscovery
 import com.subhranil.lunarexplorer.data.session.ServerProbe
 import com.subhranil.lunarexplorer.data.session.SessionManager
 import com.subhranil.lunarexplorer.data.settings.SettingsRepository
@@ -69,6 +71,7 @@ val appModule = module {
     single { SettingsRepository(get(SETTINGS_STORE)) }
     single { SessionManager(get(), get()) }
     single { ServerProbe(get()) }
+    single<ServerDiscovery> { NsdServerDiscovery(androidContext()) }
 
     // Images: previews come from the server through the explorer's session.
     single {

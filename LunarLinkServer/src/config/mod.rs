@@ -34,6 +34,8 @@ pub struct ServerConfig {
     pub max_concurrent_requests: usize,
     pub display_name: Option<String>,
     pub show_qr: bool,
+    /// Announce the server on the local network so apps can find it.
+    pub discoverable: bool,
 }
 
 impl Default for ServerConfig {
@@ -44,6 +46,7 @@ impl Default for ServerConfig {
             max_concurrent_requests: 100,
             display_name: None,
             show_qr: false,
+            discoverable: true,
         }
     }
 }
@@ -213,6 +216,7 @@ port = 1234
 max_concurrent_requests = 100
 # display_name = "My Desktop"   # shown to clients before login. Defaults to the hostname
 show_qr = false                 # print a QR code with the server URL at startup
+discoverable = true             # let apps on the local network find this server
 
 [auth]
 enabled = true

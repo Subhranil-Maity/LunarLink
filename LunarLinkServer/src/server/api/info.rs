@@ -1,3 +1,4 @@
+use crate::config::LunarConfig;
 use crate::server::state::AppState;
 use axum::extract::State;
 use axum::Json;
@@ -22,13 +23,7 @@ pub struct Info {
 
 /// Public details shown before login. Never includes the OS user name.
 pub async fn get_info(State(state): State<Arc<AppState>>) -> Json<Info> {
-    let name = state
-        .config
-        .server
-        .display_name
-        .clone()
-        .or_else(System::host_name)
-        .unwrap_or_else(|| "LunarLink".into());
+    let name = display_name(&state.config);
     Json(Info {
         name,
         os_type: std::env::consts::OS,
@@ -38,6 +33,16 @@ pub async fn get_info(State(state): State<Arc<AppState>>) -> Json<Info> {
         auth_required: state.config.auth.enabled,
         features: features(&state),
     })
+}
+
+/// `server.display_name`, or the machine's host name.
+pub fn display_name(config: &LunarConfig) -> String {
+    config
+        .server
+        .display_name
+        .clone()
+        .or_else(System::host_name)
+        .unwrap_or_else(|| "LunarLink".into())
 }
 
 fn features(state: &AppState) -> Vec<&'static str> {

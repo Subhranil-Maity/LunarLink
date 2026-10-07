@@ -6,6 +6,7 @@ port = 1234
 max_concurrent_requests = 100
 # display_name = "My Desktop"   # shown to clients before login. Defaults to the hostname
 show_qr = false                 # print a QR code with the server URL at startup
+discoverable = true             # let apps on the local network find this server
 
 [auth]
 enabled = true

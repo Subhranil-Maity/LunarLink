@@ -43,13 +43,14 @@ class MainDispatcherRule(val dispatcher: TestDispatcher = UnconfinedTestDispatch
 
 /** In-memory [DownloadFiles]; uris are "mem://<n>". */
 class FakeDownloadFiles(private val writeDelayMs: Long = 0) : DownloadFiles {
+    // Downloads run in parallel on IO threads, so everything here must be thread-safe.
     val files = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
-    val names = mutableMapOf<String, String>()
-    val published = mutableSetOf<String>()
-    private var next = 0
+    val names = java.util.concurrent.ConcurrentHashMap<String, String>()
+    val published: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private val next = java.util.concurrent.atomic.AtomicInteger()
 
     override fun create(name: String): String {
-        val uri = "mem://${next++}"
+        val uri = "mem://${next.getAndIncrement()}"
         files[uri] = ByteArray(0)
         names[uri] = name
         return uri

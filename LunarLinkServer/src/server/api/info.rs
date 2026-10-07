@@ -7,8 +7,6 @@ use sysinfo::System;
 
 pub const API_VERSION: u32 = 1;
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// Optional capabilities, so clients can hide what an older server doesn't support.
-pub const FEATURES: &[&str] = &["search"];
 
 #[derive(Serialize)]
 pub struct Info {
@@ -18,7 +16,8 @@ pub struct Info {
     server_version: &'static str,
     api_version: u32,
     auth_required: bool,
-    features: &'static [&'static str],
+    /// Optional capabilities, so clients can hide what an older server doesn't support.
+    features: Vec<&'static str>,
 }
 
 /// Public details shown before login. Never includes the OS user name.
@@ -37,8 +36,16 @@ pub async fn get_info(State(state): State<Arc<AppState>>) -> Json<Info> {
         server_version: SERVER_VERSION,
         api_version: API_VERSION,
         auth_required: state.config.auth.enabled,
-        features: FEATURES,
+        features: features(&state),
     })
+}
+
+fn features(state: &AppState) -> Vec<&'static str> {
+    let mut features = vec!["search"];
+    if state.thumbnails.is_some() {
+        features.push("thumbnails");
+    }
+    features
 }
 
 pub async fn root() -> String {

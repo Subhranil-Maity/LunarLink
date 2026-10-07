@@ -133,6 +133,14 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = koinViewMo
                     )
                 }
                 item {
+                    SwitchItem(
+                        title = stringResource(R.string.settings_thumbnails),
+                        summary = stringResource(R.string.settings_thumbnails_summary),
+                        checked = settings.showThumbnails,
+                        onCheckedChange = viewModel::setShowThumbnails,
+                    )
+                }
+                item {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.settings_default_view)) },
                         supportingContent = { Text(viewModeLabel(settings.viewMode)) },

@@ -97,6 +97,15 @@ class LunarApi(private val client: HttpClient, baseUrl: String) {
             }
         }
 
+    /** A small JPEG or PNG preview of an image file, fitting in [size]×[size] pixels. */
+    suspend fun thumbnail(token: String?, path: String, size: Int): ApiResult<ByteArray> = call {
+        client.get("$baseUrl/api/v1/fs/thumbnail") {
+            auth(token)
+            parameter("path", path)
+            parameter("size", size)
+        }
+    }
+
     suspend fun createFile(token: String?, path: String): ApiResult<Entry> = call {
         client.post("$baseUrl/api/v1/fs/file") { auth(token); json(PathBody(path)) }
     }

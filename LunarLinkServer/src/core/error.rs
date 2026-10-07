@@ -41,6 +41,8 @@ pub enum LunarError {
     TooManyAttempts { retry_after_secs: u64 },
     #[error("trash failed: {0}")]
     TrashFailed(String),
+    #[error("thumbnail unavailable: {0}")]
+    ThumbnailUnavailable(String),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -65,6 +67,7 @@ impl LunarError {
             Self::DirectoryNotEmpty => "DIRECTORY_NOT_EMPTY",
             Self::TooManyAttempts { .. } => "TOO_MANY_ATTEMPTS",
             Self::TrashFailed(_) => "TRASH_FAILED",
+            Self::ThumbnailUnavailable(_) => "THUMBNAIL_UNAVAILABLE",
             Self::Internal(_) => "INTERNAL",
         }
     }
@@ -91,6 +94,7 @@ impl LunarError {
                 "Too many failed login attempts. Try again later.".into()
             }
             Self::TrashFailed(_) => "Could not move to trash. Try deleting permanently.".into(),
+            Self::ThumbnailUnavailable(_) => "No preview is available for this file.".into(),
             Self::Internal(_) => "An internal error occurred.".into(),
         }
     }

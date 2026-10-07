@@ -16,6 +16,7 @@ pub fn status_of(err: &LunarError) -> StatusCode {
         NotFound => StatusCode::NOT_FOUND,
         AlreadyExists | DirectoryNotEmpty => StatusCode::CONFLICT,
         TooManyAttempts { .. } => StatusCode::TOO_MANY_REQUESTS,
+        ThumbnailUnavailable(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         TrashFailed(_) | Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

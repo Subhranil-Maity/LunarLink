@@ -563,6 +563,7 @@ private fun FolderPane(
         }
     }
     val truncatedNote = search?.isServerSearch == true && search.truncated
+    val thumbnailServer = state.serverId.takeIf { state.thumbnails }
 
     PullToRefreshBox(
         isRefreshing = folder.isRefreshing,
@@ -617,6 +618,7 @@ private fun FolderPane(
                         onMore = { onMore(entry) },
                         modifier = Modifier.animateItem(),
                         location = location(entry),
+                        thumbnailServer = thumbnailServer,
                     )
                 }
                 if (truncatedNote) {
@@ -641,6 +643,7 @@ private fun FolderPane(
                         onMore = { onMore(entry) },
                         modifier = Modifier.animateItem(),
                         location = location(entry),
+                        thumbnailServer = thumbnailServer,
                     )
                 }
                 if (truncatedNote) {

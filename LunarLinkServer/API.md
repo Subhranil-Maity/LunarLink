@@ -18,7 +18,7 @@
 5. [Endpoints](#endpoints)
    - [Public](#public): `GET /`, `GET /api/info`
    - [Auth](#auth): `POST /api/auth/login`, `GET /api/auth/me`
-   - [Filesystem](#filesystem): `roots`, `stat`, `list`, `search`, `download`, `file`, `dir`, `copy`, `move`, `delete`
+   - [Filesystem](#filesystem): `roots`, `stat`, `list`, `search`, `download`, `thumbnail`, `file`, `dir`, `copy`, `move`, `delete`
 6. [Configuration reference](#configuration-reference)
 
 ---
@@ -85,6 +85,7 @@ Every error response uses this shape:
 | 409 | `DIRECTORY_NOT_EMPTY` | Deleting a non-empty folder without `recursive: true` |
 | 405 | *(no JSON body)* | Wrong HTTP method for an existing endpoint |
 | 416 | *(no JSON body)* | `Range` header can't be satisfied (download only) |
+| 415 | `THUMBNAIL_UNAVAILABLE` | No preview can be made: not a supported image, too big, damaged, or thumbnails are turned off |
 | 429 | `TOO_MANY_ATTEMPTS` | Login rate limit. `details.retry_after_seconds` is set, and so is the `Retry-After` header |
 | 500 | `TRASH_FAILED` | Moving to trash failed (e.g. no trash on this system). Retry with `permanent: true` |
 | 500 | `INTERNAL` | Anything unexpected. Details are logged on the server only |
@@ -131,7 +132,7 @@ user has no `read` on is hidden from `GET /roots` and inaccessible.
 | Endpoint | Required |
 |---|---|
 | `roots` | none (only roots with `read` are returned) |
-| `stat`, `list`, `search`, `download` | `read` |
+| `stat`, `list`, `search`, `download`, `thumbnail` | `read` |
 | `file`, `dir` | `write` on the parent's root |
 | `copy` | `read` on the source root, `write` on the destination root |
 | `move` (same parent folder, i.e. rename) | `write` |
@@ -220,14 +221,15 @@ Basic server details shown before connecting. No auth required.
   "server_version": "0.2.0",
   "api_version": 1,
   "auth_required": true,
-  "features": ["search"]
+  "features": ["search", "thumbnails"]
 }
 ```
 
 - `name` is `server.display_name` if set, otherwise the machine hostname. It is never the OS user name.
 - `os_type` is one of `linux`, `windows`, `macos`, etc.
 - `features` lists optional capabilities, so clients can hide what an older server doesn't support.
-  Unknown names should be ignored. Current values: `search` (`GET /api/v1/fs/search`).
+  Unknown names should be ignored. Current values: `search` (`GET /api/v1/fs/search`) and
+  `thumbnails` (`GET /api/v1/fs/thumbnail`, absent when `thumbnails.enabled = false`).
 
 ### Auth
 
@@ -355,6 +357,26 @@ Streams the file's bytes and supports HTTP `Range` requests.
 
 Errors (JSON): `NOT_FOUND`, `IS_A_DIRECTORY`, `PATH_OUTSIDE_ROOTS`, `PERMISSION_DENIED`, `SYSTEM_ACCESS_DENIED`.
 
+#### `GET /api/v1/fs/thumbnail?path=<file>&size=<px>`  🔒
+
+A small preview of an image that fits in `size`×`size` pixels, keeping its aspect ratio. Images that
+are already smaller are not enlarged.
+
+| Query | Default | Notes |
+|---|---|---|
+| `path` | required | An image file (JPEG, PNG, GIF, WebP or BMP) |
+| `size` | `256` | Clamped to `64..=512` |
+
+- The response body is the image: `image/jpeg`, or `image/png` when the image has transparency.
+  `Cache-Control: private, max-age=604800`.
+- EXIF orientation is applied, so phone photos come out upright.
+- Previews are cached on disk (`thumbnails.cache_dir`), keyed by path, modification time, file size
+  and `size`, so a changed file gets a new preview. Cached previews are removed after 30 days.
+- At most 4 previews are made at the same time; further requests wait.
+
+Errors (JSON): `THUMBNAIL_UNAVAILABLE`, `NOT_FOUND`, `IS_A_DIRECTORY`, `PATH_OUTSIDE_ROOTS`,
+`PERMISSION_DENIED`.
+
 #### `POST /api/v1/fs/file`  🔒
 
 Creates a new empty file. The parent folder must exist.
@@ -474,6 +496,11 @@ jwt_secret = "<random, generated on first run>"
 username = "power"
 password = "power"
 permissions = ["read", "write", "delete"]   # required. [] = can log in but access nothing
+
+[thumbnails]
+enabled = true                     # previews of images for clients
+max_source_mb = 64                 # images bigger than this are not previewed
+# cache_dir = "~/.cache/lunarlink/thumbs"   # defaults to the OS cache folder
 
 [roots]
 expose_drives = false              # add every disk mount point as a root

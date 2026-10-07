@@ -151,6 +151,8 @@
     <string name="settings_show_hidden_summary">Show files and folders that start with a dot</string>
     <string name="settings_default_sort">Default sort</string>
     <string name="settings_default_view">Default view</string>
+    <string name="settings_thumbnails">Show image previews</string>
+    <string name="settings_thumbnails_summary">Load small previews of photos from the server. Turn off to save data on slow connections</string>
     <string name="settings_haptics">Haptic feedback</string>
     <string name="settings_haptics_summary">Vibrate briefly on long-press, selection, pull to refresh and when actions finish</string>
     <string name="settings_data">Data</string>

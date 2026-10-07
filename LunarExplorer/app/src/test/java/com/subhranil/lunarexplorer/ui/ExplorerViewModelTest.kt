@@ -172,6 +172,19 @@ class ExplorerViewModelTest {
     }
 
     @Test
+    fun thumbnailsFollowServerSupportAndSetting() = runTest {
+        val vm = viewModel()
+        val share = openShare(vm)
+        assertTrue(share.thumbnails)
+        assertTrue(share.serverId.isNotEmpty())
+        withContext(Dispatchers.Default) { settings.setShowThumbnails(false) }
+        vm.await { !it.thumbnails }
+
+        val old = viewModel(fake = FakeLunarServer(features = emptySet()).file("/share/a.jpg"))
+        assertFalse(openShare(old).thumbnails)
+    }
+
+    @Test
     fun recursiveSearchNeedsServerSupport() = runTest {
         val old = FakeLunarServer(features = emptySet()).file("/share/a.txt")
         val vm = viewModel(fake = old)

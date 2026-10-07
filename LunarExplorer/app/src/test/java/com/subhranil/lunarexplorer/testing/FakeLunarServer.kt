@@ -33,7 +33,7 @@ class FakeLunarServer(
     val authRequired: Boolean = true,
     val rootPath: String = "/share",
     /** Optional features reported by `/api/info`. */
-    val features: Set<String> = setOf("search"),
+    val features: Set<String> = setOf("search", "thumbnails"),
 ) {
     /** Paths that exist; folders end up as keys with `true`. */
     val nodes = sortedMapOf(rootPath to true)
@@ -183,6 +183,13 @@ class FakeLunarServer(
                 json(entryJson(target))
             }
             "/api/v1/fs/download" -> download(request)
+            "/api/v1/fs/thumbnail" -> {
+                val target = request.url.parameters["path"]!!
+                if (target !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")
+                if (!target.endsWith(".jpg")) return error(HttpStatusCode.UnsupportedMediaType, "THUMBNAIL_UNAVAILABLE")
+                val size = request.url.parameters["size"]!!
+                respond("thumb:$size:$target".toByteArray(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "image/jpeg"))
+            }
             "/api/v1/fs/search" -> {
                 if ("search" !in features) return error(HttpStatusCode.NotFound, "NOT_FOUND")
                 val dir = request.url.parameters["path"]!!

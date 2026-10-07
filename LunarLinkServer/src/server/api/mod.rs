@@ -2,6 +2,7 @@ pub mod auth;
 pub mod download;
 pub mod fs;
 pub mod info;
+pub mod thumbs;
 
 use crate::core::error::{LunarError, LunarResult};
 

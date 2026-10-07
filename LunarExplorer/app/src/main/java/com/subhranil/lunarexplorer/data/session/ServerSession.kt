@@ -48,6 +48,8 @@ class ServerSession private constructor(
     suspend fun search(path: String, query: String, showHidden: Boolean): ApiResult<SearchResult> =
         authed { api.search(it, path, query, showHidden) }
 
+    suspend fun thumbnail(path: String, size: Int): ApiResult<ByteArray> = authed { api.thumbnail(it, path, size) }
+
     suspend fun createFile(path: String): ApiResult<Entry> = authed { api.createFile(it, path) }
 
     suspend fun createDir(path: String): ApiResult<Entry> = authed { api.createDir(it, path) }

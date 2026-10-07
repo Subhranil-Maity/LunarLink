@@ -27,6 +27,10 @@ import com.subhranil.lunarexplorer.ui.downloads.DownloadsViewModel
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerViewModel
 import com.subhranil.lunarexplorer.ui.home.HomeViewModel
 import com.subhranil.lunarexplorer.ui.settings.SettingsViewModel
+import coil3.ImageLoader
+import coil3.request.crossfade
+import com.subhranil.lunarexplorer.data.thumbs.ThumbnailFetcher
+import com.subhranil.lunarexplorer.data.thumbs.ThumbnailKeyer
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +69,17 @@ val appModule = module {
     single { SettingsRepository(get(SETTINGS_STORE)) }
     single { SessionManager(get(), get()) }
     single { ServerProbe(get()) }
+
+    // Images: previews come from the server through the explorer's session.
+    single {
+        ImageLoader.Builder(androidContext())
+            .components {
+                add(ThumbnailFetcher.Factory(get()))
+                add(ThumbnailKeyer())
+            }
+            .crossfade(true)
+            .build()
+    }
 
     // Downloads
     single { DownloadStore(get(DOWNLOADS_STORE)) }

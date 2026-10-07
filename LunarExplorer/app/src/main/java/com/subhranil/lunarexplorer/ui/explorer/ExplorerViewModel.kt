@@ -46,7 +46,7 @@ class ExplorerViewModel(
     private val downloads: DownloadRepository,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ExplorerUiState())
+    private val _state = MutableStateFlow(ExplorerUiState(serverId = serverId))
     val state: StateFlow<ExplorerUiState> = _state.asStateFlow()
 
     private val _messages = Channel<UiText>(Channel.BUFFERED)
@@ -83,6 +83,7 @@ class ExplorerViewModel(
                         sortOrder = if (takeSort) prefs.sortOrder else it.sortOrder,
                         showHidden = if (takeHidden) prefs.showHiddenFiles else it.showHidden,
                         viewMode = if (takeViewMode) prefs.viewMode else it.viewMode,
+                        showThumbnails = prefs.showThumbnails,
                     )
                 }
                 val after = _state.value

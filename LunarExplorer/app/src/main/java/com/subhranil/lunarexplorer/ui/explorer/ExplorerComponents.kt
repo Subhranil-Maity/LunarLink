@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
@@ -59,7 +61,8 @@ import com.subhranil.lunarexplorer.data.api.Entry
 import com.subhranil.lunarexplorer.data.api.Permission
 import com.subhranil.lunarexplorer.data.api.Root
 import com.subhranil.lunarexplorer.data.api.RootKind
-import com.subhranil.lunarexplorer.ui.components.EntryIcon
+import com.subhranil.lunarexplorer.ui.components.EntryPreview
+import com.subhranil.lunarexplorer.ui.components.EntryPreviewSmall
 import com.subhranil.lunarexplorer.util.Crumb
 import com.subhranil.lunarexplorer.util.formatBytes
 
@@ -89,6 +92,8 @@ fun EntryRow(
     modifier: Modifier = Modifier,
     /** Where the entry is, relative to the folder being searched. Only set for search results. */
     location: String? = null,
+    /** Server to load image previews from, or `null` to show icons only. */
+    thumbnailServer: String? = null,
 ) {
     val modified = formatModified(entry.modified)
     val details = if (entry.isDirLike) listOf(modified) else listOf(formatBytes(entry.size), modified)
@@ -101,7 +106,7 @@ fun EntryRow(
             containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
         ),
         leadingContent = {
-            if (selected) SelectionMark() else EntryIcon(entry)
+            if (selected) SelectionMark() else EntryPreviewSmall(entry, thumbnailServer, 40.dp, RoundedCornerShape(8.dp))
         },
         headlineContent = { Text(entry.name, maxLines = 1, overflow = TextOverflow.MiddleEllipsis) },
         supportingContent = { if (supporting.isNotEmpty()) Text(supporting, maxLines = 1) },
@@ -128,6 +133,8 @@ fun EntryTile(
     modifier: Modifier = Modifier,
     /** Where the entry is, relative to the folder being searched. Only set for search results. */
     location: String? = null,
+    /** Server to load image previews from, or `null` to show icons only. */
+    thumbnailServer: String? = null,
 ) {
     val shape = MaterialTheme.shapes.medium
     val supporting = location ?: if (entry.isDirLike) "" else formatBytes(entry.size)
@@ -147,7 +154,13 @@ fun EntryTile(
                     .aspectRatio(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                EntryIcon(entry, size = 56.dp)
+                EntryPreview(
+                    entry,
+                    serverId = thumbnailServer,
+                    iconSize = 56.dp,
+                    previewPx = 384,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 if (selected) {
                     SelectionMark(
                         Modifier

@@ -139,4 +139,16 @@ class LunarApiTest {
         assertTrue((missing as ApiResult.Failure).error.hasCode(ErrorCode.NOT_FOUND))
         assertFalse(called)
     }
+
+    @Test
+    fun thumbnailsAreRawBytesAndFailuresUseErrorCodes() = runTest {
+        val server = FakeLunarServer().file("/share/photo.jpg").file("/share/notes.txt")
+        val api = server.api()
+        val token = (api.login("user", "pw") as ApiResult.Success).value.token
+        val bytes = (api.thumbnail(token, "/share/photo.jpg", 128) as ApiResult.Success).value
+        assertEquals("thumb:128:/share/photo.jpg", bytes.decodeToString())
+        val failure = api.thumbnail(token, "/share/notes.txt", 128) as ApiResult.Failure
+        assertTrue(failure.error.hasCode(ErrorCode.THUMBNAIL_UNAVAILABLE))
+        assertEquals(415, (failure.error as LunarError.Api).status)
+    }
 }

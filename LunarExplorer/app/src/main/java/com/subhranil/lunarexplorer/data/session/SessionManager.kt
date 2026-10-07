@@ -45,6 +45,10 @@ class SessionManager(
         }
     }
 
+    /** The connected session for [serverId], or `null` when that server isn't the one connected. */
+    fun current(serverId: String): ServerSession? =
+        (_state.value as? SessionState.Connected)?.session?.takeIf { it.serverId == serverId }
+
     fun disconnect(serverId: String? = null) {
         val current = _state.value
         val currentId = when (current) {

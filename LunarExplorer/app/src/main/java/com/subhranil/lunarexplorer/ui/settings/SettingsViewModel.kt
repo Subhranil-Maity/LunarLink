@@ -44,6 +44,8 @@ class SettingsViewModel(
 
     fun setHaptics(enabled: Boolean) = launch { settings.setHaptics(enabled) }
 
+    fun setShowThumbnails(show: Boolean) = launch { settings.setShowThumbnails(show) }
+
     fun removeAllServers() = launch {
         sessions.disconnect()
         servers.deleteAll()

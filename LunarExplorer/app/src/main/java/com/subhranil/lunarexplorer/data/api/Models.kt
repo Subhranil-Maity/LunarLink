@@ -103,6 +103,7 @@ data class ServerInfo(
 /** Names of optional capabilities listed in [ServerInfo.features]. */
 object ServerFeature {
     const val SEARCH = "search"
+    const val THUMBNAILS = "thumbnails"
 }
 
 @Serializable

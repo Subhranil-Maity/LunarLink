@@ -73,6 +73,9 @@ username = "nobody"
 password = "nobody-pass"
 permissions = []
 
+[thumbnails]
+cache_dir = "{cache}"
+
 [[roots.mounts]]
 name = "share"
 path = "{share}"
@@ -84,6 +87,7 @@ path = "{readonly}"
 "#,
         share = base.join("share").display(),
         readonly = base.join("readonly").display(),
+        cache = base.join("thumb-cache").display(),
     );
     let config = LunarConfig::from_toml_str(&toml).unwrap();
     TestServer {
@@ -185,6 +189,10 @@ async fn root_info_and_unknown_routes() {
         .as_array()
         .unwrap()
         .contains(&json!("search")));
+    assert!(info["features"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("thumbnails")));
     assert_eq!(info["os_type"], std::env::consts::OS);
     assert!(info["name"].is_string());
     assert!(info.get("device_name").is_none());
@@ -901,4 +909,90 @@ async fn search_errors() {
     assert_eq!(res.error_code(), "PERMISSION_DENIED");
     let res = s.get(&url(&share, "file"), None).await;
     assert_eq!(res.error_code(), "UNAUTHENTICATED");
+}
+
+// ---------- thumbnails ----------
+
+#[tokio::test]
+async fn thumbnails_of_images() {
+    let s = server(true);
+    let token = s.token("reader").await;
+    let share = s.share();
+    image::RgbImage::from_pixel(640, 320, image::Rgb([200, 30, 30]))
+        .save(share.join("photo.png"))
+        .unwrap();
+    fs::write(share.join("notes.txt"), "hi").unwrap();
+    let url = |name: &str, extra: &str| {
+        format!(
+            "/api/v1/fs/thumbnail?path={}{extra}",
+            enc(&p(&share.join(name)))
+        )
+    };
+
+    let res = s.get(&url("photo.png", "&size=128"), Some(&token)).await;
+    assert_eq!(res.status, StatusCode::OK);
+    assert_eq!(res.headers[header::CONTENT_TYPE], "image/jpeg");
+    assert!(res.headers[header::CACHE_CONTROL]
+        .to_str()
+        .unwrap()
+        .contains("max-age"));
+    let thumb = image::load_from_memory(&res.body).unwrap();
+    assert_eq!((thumb.width(), thumb.height()), (128, 64));
+    assert_eq!(fs::read_dir(s.base.join("thumb-cache")).unwrap().count(), 1);
+
+    let res = s.get(&url("notes.txt", ""), Some(&token)).await;
+    assert_eq!(res.status, StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    assert_eq!(res.error_code(), "THUMBNAIL_UNAVAILABLE");
+    let res = s.get(&url("missing.png", ""), Some(&token)).await;
+    assert_eq!(res.error_code(), "NOT_FOUND");
+    let res = s.get(&url("photo.png", ""), None).await;
+    assert_eq!(res.error_code(), "UNAUTHENTICATED");
+    let nobody = s.token("nobody").await;
+    let res = s.get(&url("photo.png", ""), Some(&nobody)).await;
+    assert_eq!(res.error_code(), "PERMISSION_DENIED");
+}
+
+#[tokio::test]
+async fn thumbnails_can_be_turned_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let share = dunce::canonicalize(dir.path()).unwrap();
+    let toml = format!(
+        r#"
+[auth]
+enabled = false
+jwt_secret = "{SECRET}"
+
+[thumbnails]
+enabled = false
+
+[[roots.mounts]]
+name = "share"
+path = "{}"
+"#,
+        share.display()
+    );
+    let app = build_app(AppState::new(LunarConfig::from_toml_str(&toml).unwrap()));
+    let s = TestServer {
+        _dir: dir,
+        base: share.clone(),
+        app,
+    };
+    let info = s.get("/api/info", None).await.json();
+    assert!(!info["features"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("thumbnails")));
+    image::RgbImage::new(10, 10)
+        .save(share.join("a.png"))
+        .unwrap();
+    let res = s
+        .get(
+            &format!(
+                "/api/v1/fs/thumbnail?path={}",
+                enc(&p(&share.join("a.png")))
+            ),
+            None,
+        )
+        .await;
+    assert_eq!(res.error_code(), "THUMBNAIL_UNAVAILABLE");
 }

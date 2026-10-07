@@ -22,6 +22,8 @@ pub struct LunarConfig {
     pub users: Vec<UserConfig>,
     #[serde(default)]
     pub roots: RootsConfig,
+    #[serde(default)]
+    pub thumbnails: ThumbnailsConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -83,6 +85,26 @@ impl Default for RootsConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ThumbnailsConfig {
+    pub enabled: bool,
+    /// Images bigger than this many megabytes are not previewed.
+    pub max_source_mb: u64,
+    /// Where generated previews are kept. Defaults to the system cache folder.
+    pub cache_dir: Option<String>,
+}
+
+impl Default for ThumbnailsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_source_mb: 64,
+            cache_dir: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MountConfig {
     pub name: String,
@@ -118,6 +140,9 @@ impl LunarConfig {
         )?;
         for mount in &mut config.roots.mounts {
             mount.path = expand_path(&mount.path);
+        }
+        if let Some(dir) = &mut config.thumbnails.cache_dir {
+            *dir = expand_path(dir);
         }
         config.validate()?;
         Ok(config)
@@ -200,6 +225,11 @@ jwt_secret = "{jwt_secret}"
 username = "admin"
 password = "{admin_password}"
 permissions = ["read", "write", "delete"]
+
+[thumbnails]
+enabled = true                  # small previews of images, shown in the app
+max_source_mb = 64              # images bigger than this are not previewed
+# cache_dir = "~/.cache/lunarlink/thumbs"   # defaults to the system cache folder
 
 [roots]
 expose_drives = false           # share every disk mount point as a root

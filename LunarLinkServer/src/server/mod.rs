@@ -25,6 +25,7 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route("/list", get(api::fs::list))
         .route("/search", get(api::fs::search))
         .route("/download", get(api::download::download))
+        .route("/thumbnail", get(api::thumbs::thumbnail))
         .route("/file", post(api::fs::create_file))
         .route("/dir", post(api::fs::create_dir))
         .route("/copy", post(api::fs::copy))
@@ -78,6 +79,13 @@ pub async fn run_server(config: LunarConfig) -> anyhow::Result<()> {
     let state = AppState::new(config);
     for root in state.roots().roots() {
         tracing::info!(name = %root.name, path = %root.path.display(), "sharing root");
+    }
+    if let Some(thumbs) = state.thumbnails.clone() {
+        match thumbs.cache_dir() {
+            Some(dir) => tracing::info!(cache = %dir.display(), "thumbnails enabled"),
+            None => tracing::info!("thumbnails enabled without a cache"),
+        }
+        tokio::task::spawn_blocking(move || thumbs.prune_cache());
     }
     if state.roots().roots().is_empty() {
         tracing::warn!("no roots are available; clients will not be able to browse anything");

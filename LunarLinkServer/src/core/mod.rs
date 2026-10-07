@@ -6,3 +6,4 @@ pub mod list;
 pub mod path;
 pub mod permission;
 pub mod search;
+pub mod thumbs;

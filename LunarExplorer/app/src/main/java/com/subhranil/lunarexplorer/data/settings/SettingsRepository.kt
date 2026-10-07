@@ -22,6 +22,7 @@ data class AppSettings(
     val sortOrder: SortOrder = SortOrder.ASC,
     val viewMode: ViewMode = ViewMode.LIST,
     val hapticsEnabled: Boolean = true,
+    val showThumbnails: Boolean = true,
 )
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -36,6 +37,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             sortOrder = p[SORT_ORDER].toEnum(defaults.sortOrder),
             viewMode = p[VIEW_MODE].toEnum(defaults.viewMode),
             hapticsEnabled = p[HAPTICS] ?: defaults.hapticsEnabled,
+            showThumbnails = p[THUMBNAILS] ?: defaults.showThumbnails,
         )
     }
 
@@ -54,6 +56,8 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
 
     suspend fun setHaptics(enabled: Boolean) = store.edit { it[HAPTICS] = enabled }
 
+    suspend fun setShowThumbnails(show: Boolean) = store.edit { it[THUMBNAILS] = show }
+
     private companion object {
         val THEME = stringPreferencesKey("theme")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
@@ -62,6 +66,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val VIEW_MODE = stringPreferencesKey("view_mode")
         val HAPTICS = booleanPreferencesKey("haptics")
+        val THUMBNAILS = booleanPreferencesKey("thumbnails")
 
         inline fun <reified E : Enum<E>> String?.toEnum(default: E): E =
             this?.let { name -> enumValues<E>().firstOrNull { it.name == name } } ?: default

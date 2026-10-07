@@ -3,6 +3,7 @@ package com.subhranil.lunarexplorer.ui.explorer
 import com.subhranil.lunarexplorer.data.api.Entry
 import com.subhranil.lunarexplorer.data.api.Permission
 import com.subhranil.lunarexplorer.data.api.Root
+import com.subhranil.lunarexplorer.data.api.ServerFeature
 import com.subhranil.lunarexplorer.data.api.SortKey
 import com.subhranil.lunarexplorer.data.api.SortOrder
 import com.subhranil.lunarexplorer.data.settings.ViewMode
@@ -60,6 +61,7 @@ data class SearchState(
 }
 
 data class ExplorerUiState(
+    val serverId: String = "",
     val serverName: String = "",
     val connection: Connection = Connection.Connecting,
     val roots: List<Root> = emptyList(),
@@ -72,6 +74,8 @@ data class ExplorerUiState(
     val sortOrder: SortOrder = SortOrder.ASC,
     val showHidden: Boolean = true,
     val viewMode: ViewMode = ViewMode.LIST,
+    /** The user's setting; see [thumbnails] for whether previews are actually shown. */
+    val showThumbnails: Boolean = true,
     /** Optional features of the connected server, see [com.subhranil.lunarexplorer.data.api.ServerFeature]. */
     val serverFeatures: Set<String> = emptySet(),
     /** `null` when search is closed. */
@@ -85,6 +89,7 @@ data class ExplorerUiState(
     val canWrite: Boolean get() = root?.can(Permission.WRITE) == true
     val canDelete: Boolean get() = root?.can(Permission.DELETE) == true
     val isSelecting: Boolean get() = selection.isNotEmpty()
+    val thumbnails: Boolean get() = showThumbnails && ServerFeature.THUMBNAILS in serverFeatures
     val canGoBack: Boolean get() = folder != null
 
     val searchQuery: String? get() = search?.query

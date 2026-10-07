@@ -19,6 +19,11 @@ username = "admin"
 password = "change-me"
 permissions = ["read", "write", "delete"]
 
+[thumbnails]
+enabled = true                  # small previews of images, shown in the app
+max_source_mb = 64              # images bigger than this are not previewed
+# cache_dir = "~/.cache/lunarlink/thumbs"   # defaults to the system cache folder
+
 [roots]
 expose_drives = false           # share every disk mount point as a root
 drive_permissions = ["read"]    # permissions for drive roots

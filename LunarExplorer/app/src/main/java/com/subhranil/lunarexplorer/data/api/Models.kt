@@ -84,6 +84,38 @@ data class Listing(
 )
 
 @Serializable
+enum class JobState {
+    @SerialName("preparing") PREPARING,
+    @SerialName("running") RUNNING,
+    @SerialName("done") DONE,
+    @SerialName("failed") FAILED,
+    @SerialName("cancelled") CANCELLED;
+
+    val isFinished: Boolean get() = this == DONE || this == FAILED || this == CANCELLED
+}
+
+@Serializable
+data class JobError(val code: String, val message: String)
+
+/** A copy or move running on the server (`/api/v1/jobs`). */
+@Serializable
+data class Job(
+    val id: String,
+    val kind: String,
+    val state: JobState,
+    val from: String,
+    val to: String,
+    @SerialName("bytes_total") val bytesTotal: Long = 0,
+    @SerialName("bytes_done") val bytesDone: Long = 0,
+    @SerialName("files_total") val filesTotal: Long = 0,
+    @SerialName("files_done") val filesDone: Long = 0,
+    /** Name of the file being copied right now. */
+    val current: String? = null,
+    val entry: Entry? = null,
+    val error: JobError? = null,
+)
+
+@Serializable
 data class SearchResult(val items: List<Entry>, val truncated: Boolean)
 
 @Serializable
@@ -104,6 +136,7 @@ data class ServerInfo(
 object ServerFeature {
     const val SEARCH = "search"
     const val THUMBNAILS = "thumbnails"
+    const val JOBS = "jobs"
 }
 
 @Serializable

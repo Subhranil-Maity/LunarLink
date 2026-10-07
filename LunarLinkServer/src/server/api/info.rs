@@ -41,7 +41,7 @@ pub async fn get_info(State(state): State<Arc<AppState>>) -> Json<Info> {
 }
 
 fn features(state: &AppState) -> Vec<&'static str> {
-    let mut features = vec!["search"];
+    let mut features = vec!["search", "jobs"];
     if state.thumbnails.is_some() {
         features.push("thumbnails");
     }

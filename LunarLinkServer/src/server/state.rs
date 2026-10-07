@@ -1,6 +1,7 @@
 use crate::auth::login_guard::LoginGuard;
 use crate::config::LunarConfig;
 use crate::core::disks::list_disks;
+use crate::core::jobs::JobRegistry;
 use crate::core::path::RootTable;
 use crate::core::thumbs::Thumbnailer;
 use std::path::PathBuf;
@@ -18,6 +19,7 @@ pub struct AppState {
     /// `None` when thumbnails are turned off in the config.
     pub thumbnails: Option<Arc<Thumbnailer>>,
     pub thumbnail_permits: Semaphore,
+    pub jobs: JobRegistry,
 }
 
 impl AppState {
@@ -42,6 +44,7 @@ impl AppState {
             roots: RwLock::new(Arc::new(roots)),
             thumbnails,
             thumbnail_permits: Semaphore::new(THUMBNAIL_WORKERS),
+            jobs: JobRegistry::default(),
         })
     }
 

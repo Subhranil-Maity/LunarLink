@@ -249,20 +249,52 @@ pub async fn create_dir(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TransferBody {
-    from: String,
-    to: String,
+    pub(crate) from: String,
+    pub(crate) to: String,
     #[serde(default)]
-    overwrite: bool,
+    pub(crate) overwrite: bool,
 }
 
-fn resolve_transfer(
+/// Resolves and checks permissions for a copy. Shared by `copy` and copy jobs.
+pub(crate) fn authorize_copy(
     state: &AppState,
+    user: &AuthUser,
     body: &TransferBody,
 ) -> LunarResult<(ResolvedPath, ResolvedPath)> {
     let from = resolve(state, &body.from, Leaf::NoFollow)?;
     let to = resolve(state, &body.to, Leaf::NoFollow)?;
     if to.is_root() {
         return Err(LunarError::InvalidOperation("A root cannot be replaced."));
+    }
+    require(user, &from, &[Read])?;
+    require(user, &to, &[Write])?;
+    Ok((from, to))
+}
+
+/// Resolves and checks permissions for a move. Shared by `move` and move jobs.
+pub(crate) fn authorize_move(
+    state: &AppState,
+    user: &AuthUser,
+    body: &TransferBody,
+) -> LunarResult<(ResolvedPath, ResolvedPath)> {
+    let from = resolve(state, &body.from, Leaf::NoFollow)?;
+    if from.is_root() {
+        return Err(LunarError::InvalidOperation("A root cannot be moved."));
+    }
+    let to = resolve(state, &body.to, Leaf::NoFollow)?;
+    if from.path == to.path {
+        require(user, &from, &[Write])?;
+        return Ok((from, to));
+    }
+    if to.is_root() {
+        return Err(LunarError::InvalidOperation("A root cannot be replaced."));
+    }
+    let is_rename = from.path.parent() == to.path.parent() && Arc::ptr_eq(&from.root, &to.root);
+    if is_rename {
+        require(user, &from, &[Write])?;
+    } else {
+        require(user, &from, &[Write, Delete])?;
+        require(user, &to, &[Write])?;
     }
     Ok((from, to))
 }
@@ -272,9 +304,7 @@ pub async fn copy(
     Extension(user): Extension<AuthUser>,
     ApiJson(body): ApiJson<TransferBody>,
 ) -> LunarResult<(StatusCode, Json<Entry>)> {
-    let (from, to) = resolve_transfer(&state, &body)?;
-    require(&user, &from, &[Read])?;
-    require(&user, &to, &[Write])?;
+    let (from, to) = authorize_copy(&state, &user, &body)?;
     let overwrite = body.overwrite;
     let copied = blocking(move || {
         ops::copy(&from.path, &to.path, overwrite)?;
@@ -289,24 +319,9 @@ pub async fn move_entry(
     Extension(user): Extension<AuthUser>,
     ApiJson(body): ApiJson<TransferBody>,
 ) -> LunarResult<Json<Entry>> {
-    let from = resolve(&state, &body.from, Leaf::NoFollow)?;
-    if from.is_root() {
-        return Err(LunarError::InvalidOperation("A root cannot be moved."));
-    }
-    let to = resolve(&state, &body.to, Leaf::NoFollow)?;
+    let (from, to) = authorize_move(&state, &user, &body)?;
     if from.path == to.path {
-        require(&user, &from, &[Write])?;
         return Ok(Json(entry(to.path).await?));
-    }
-    if to.is_root() {
-        return Err(LunarError::InvalidOperation("A root cannot be replaced."));
-    }
-    let is_rename = from.path.parent() == to.path.parent() && Arc::ptr_eq(&from.root, &to.root);
-    if is_rename {
-        require(&user, &from, &[Write])?;
-    } else {
-        require(&user, &from, &[Write, Delete])?;
-        require(&user, &to, &[Write])?;
     }
     let overwrite = body.overwrite;
     let moved = blocking(move || {

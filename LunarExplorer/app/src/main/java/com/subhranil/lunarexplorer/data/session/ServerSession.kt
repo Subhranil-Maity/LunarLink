@@ -4,6 +4,7 @@ import com.subhranil.lunarexplorer.data.api.ApiResult
 import com.subhranil.lunarexplorer.data.api.DownloadResponse
 import com.subhranil.lunarexplorer.data.api.Entry
 import com.subhranil.lunarexplorer.data.api.ErrorCode
+import com.subhranil.lunarexplorer.data.api.Job
 import com.subhranil.lunarexplorer.data.api.ListQuery
 import com.subhranil.lunarexplorer.data.api.Listing
 import com.subhranil.lunarexplorer.data.api.LunarApi
@@ -59,6 +60,16 @@ class ServerSession private constructor(
 
     suspend fun move(from: String, to: String, overwrite: Boolean): ApiResult<Entry> =
         authed { api.move(it, from, to, overwrite) }
+
+    suspend fun startCopyJob(from: String, to: String, overwrite: Boolean): ApiResult<Job> =
+        authed { api.startCopyJob(it, from, to, overwrite) }
+
+    suspend fun startMoveJob(from: String, to: String, overwrite: Boolean): ApiResult<Job> =
+        authed { api.startMoveJob(it, from, to, overwrite) }
+
+    suspend fun job(id: String): ApiResult<Job> = authed { api.job(it, id) }
+
+    suspend fun cancelJob(id: String): ApiResult<Job> = authed { api.cancelJob(it, id) }
 
     suspend fun delete(path: String, permanent: Boolean, recursive: Boolean): ApiResult<Unit> =
         authed { api.delete(it, path, permanent, recursive) }

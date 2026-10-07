@@ -7,6 +7,8 @@ import com.subhranil.lunarexplorer.data.api.ApiResult
 import com.subhranil.lunarexplorer.data.api.Entry
 import com.subhranil.lunarexplorer.data.api.EntryKind
 import com.subhranil.lunarexplorer.data.api.ErrorCode
+import com.subhranil.lunarexplorer.data.api.Job as ServerJob
+import com.subhranil.lunarexplorer.data.api.JobState
 import com.subhranil.lunarexplorer.data.api.ListQuery
 import com.subhranil.lunarexplorer.data.api.LunarError
 import com.subhranil.lunarexplorer.data.api.Permission
@@ -60,6 +62,11 @@ class ExplorerViewModel(
     private var loadJob: Job? = null
     private var operationJob: Job? = null
     private var searchJob: Job? = null
+
+    /** Set by [cancelOperation]; loops stop before their next item. */
+    private var cancelRequested = false
+    /** Server job of the copy or move in progress, so it can be cancelled. */
+    private var activeServerJob: String? = null
 
     // Values this screen saved itself, so their echo from the settings flow (or an older value still
     // in flight) doesn't undo a newer choice.
@@ -415,9 +422,11 @@ class ExplorerViewModel(
     fun delete(entries: List<Entry>, permanent: Boolean) {
         val session = session ?: return
         _state.update { it.copy(dialog = null, selection = emptySet()) }
-        runOperation(entries.size) { tick ->
+        runOperation(OperationKind.DELETE, entries.size) { tick ->
             val failures = mutableListOf<LunarError>()
-            entries.forEach { entry ->
+            for (entry in entries) {
+                if (cancelRequested) break
+                showCurrent(entry.name)
                 val recursive = entry.kind == EntryKind.DIR
                 val result = session.delete(entry.path, permanent, recursive)
                 if (result is ApiResult.Failure) failures += result.error
@@ -456,10 +465,13 @@ class ExplorerViewModel(
         _state.update { it.copy(clipboard = null) }
         val taken = s.folder.items.map { it.name }.toMutableSet()
 
-        runOperation(clipboard.entries.size) { tick ->
+        val kind = if (clipboard.mode == ClipboardMode.COPY) OperationKind.COPY else OperationKind.MOVE
+        runOperation(kind, clipboard.entries.size) { tick ->
             val failures = mutableListOf<LunarError>()
             var applyToAll: ConflictAction? = null
             for (entry in clipboard.entries) {
+                if (cancelRequested) break
+                showCurrent(entry.name)
                 val outcome = transfer(session, clipboard.mode, entry, destination, taken) { name ->
                     applyToAll ?: askConflict(name).let { (action, all) ->
                         if (all) applyToAll = action
@@ -491,9 +503,12 @@ class ExplorerViewModel(
         // Moving an item into the folder it's already in does nothing.
         if (mode == ClipboardMode.MOVE && sameFolder) return null
 
-        suspend fun run(target: String, overwrite: Boolean) =
-            if (mode == ClipboardMode.COPY) session.copy(entry.path, target, overwrite)
-            else session.move(entry.path, target, overwrite)
+        val useJobs = ServerFeature.JOBS in _state.value.serverFeatures
+        suspend fun run(target: String, overwrite: Boolean): ApiResult<*> = when {
+            useJobs -> runServerJob(session, mode, entry.path, target, overwrite)
+            mode == ClipboardMode.COPY -> session.copy(entry.path, target, overwrite)
+            else -> session.move(entry.path, target, overwrite)
+        }
 
         /** Retries with "name (1)", "name (2)", ... until the server accepts the name. */
         suspend fun keepBoth(): LunarError? {
@@ -521,6 +536,79 @@ class ExplorerViewModel(
         return result.errorOrNull()
     }
 
+    /**
+     * Copies or moves one item as a server job and follows its progress until it ends. A cancelled
+     * job counts as success here; the caller checks [cancelRequested].
+     */
+    private suspend fun runServerJob(
+        session: ServerSession,
+        mode: ClipboardMode,
+        from: String,
+        to: String,
+        overwrite: Boolean,
+    ): ApiResult<Unit> {
+        val started = if (mode == ClipboardMode.COPY) session.startCopyJob(from, to, overwrite)
+        else session.startMoveJob(from, to, overwrite)
+        var job = when (started) {
+            is ApiResult.Failure -> return started
+            is ApiResult.Success -> started.value
+        }
+        activeServerJob = job.id
+        try {
+            // Cancel may have been pressed while the job was being started.
+            if (cancelRequested) session.cancelJob(job.id)
+            var misses = 0
+            while (!job.state.isFinished) {
+                showJobProgress(job)
+                delay(JOB_POLL_MS)
+                when (val polled = session.job(job.id)) {
+                    is ApiResult.Success -> {
+                        job = polled.value
+                        misses = 0
+                    }
+                    // Ride out short network blips; the job keeps running on the server regardless.
+                    is ApiResult.Failure -> if (++misses >= MAX_POLL_MISSES) return polled
+                }
+            }
+        } finally {
+            activeServerJob = null
+        }
+        showJobProgress(job)
+        return when (job.state) {
+            JobState.FAILED -> {
+                val error = job.error
+                ApiResult.Failure(
+                    LunarError.Api(ErrorCode.parse(error?.code ?: "INTERNAL"), error?.message.orEmpty(), status = 0)
+                )
+            }
+            else -> ApiResult.Success(Unit)
+        }
+    }
+
+    private fun showCurrent(name: String) = _state.update { s ->
+        s.copy(progress = s.progress?.copy(currentName = name, bytesDone = 0, bytesTotal = 0))
+    }
+
+    private fun showJobProgress(job: ServerJob) = _state.update { s ->
+        s.copy(
+            progress = s.progress?.copy(
+                currentName = job.current ?: s.progress.currentName,
+                bytesDone = job.bytesDone,
+                bytesTotal = job.bytesTotal,
+            )
+        )
+    }
+
+    /** Stops the running copy, move or delete after the current item; a server job stops right away. */
+    fun cancelOperation() {
+        if (_state.value.progress == null || cancelRequested) return
+        cancelRequested = true
+        _state.update { it.copy(progress = it.progress?.copy(cancelling = true)) }
+        val jobId = activeServerJob ?: return
+        val session = session ?: return
+        viewModelScope.launch { session.cancelJob(jobId) }
+    }
+
     private suspend fun askConflict(name: String): Pair<ConflictAction, Boolean> {
         val deferred = CompletableDeferred<Pair<ConflictAction, Boolean>>()
         pendingConflict = deferred
@@ -536,10 +624,11 @@ class ExplorerViewModel(
 
     // ---------- helpers ----------
 
-    private fun runOperation(total: Int, block: suspend (tick: () -> Unit) -> Unit) {
+    private fun runOperation(kind: OperationKind, total: Int, block: suspend (tick: () -> Unit) -> Unit) {
         if (operationJob?.isActive == true) return
+        cancelRequested = false
         operationJob = viewModelScope.launch {
-            _state.update { it.copy(progress = Progress(0, total)) }
+            _state.update { it.copy(progress = Progress(kind, 0, total)) }
             try {
                 block {
                     _state.update { s -> s.copy(progress = s.progress?.let { p -> p.copy(done = p.done + 1) }) }
@@ -552,6 +641,10 @@ class ExplorerViewModel(
     }
 
     private suspend fun summary(total: Int, failures: List<LunarError>, successRes: Int) {
+        if (cancelRequested) {
+            _messages.send(uiText(R.string.explorer_operation_cancelled))
+            return
+        }
         val message = if (failures.isEmpty()) {
             pluralText(successRes, total)
         } else {
@@ -578,5 +671,7 @@ class ExplorerViewModel(
         const val PAGE_SIZE = 200
         const val MAX_RENAME_ATTEMPTS = 20
         const val SEARCH_DEBOUNCE_MS = 300L
+        const val JOB_POLL_MS = 400L
+        const val MAX_POLL_MISSES = 5
     }
 }

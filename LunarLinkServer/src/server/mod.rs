@@ -32,8 +32,16 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route("/move", post(api::fs::move_entry))
         .route("/delete", post(api::fs::delete));
 
+    let jobs = Router::new()
+        .route("/", get(api::jobs::list))
+        .route("/copy", post(api::jobs::start_copy))
+        .route("/move", post(api::jobs::start_move))
+        .route("/{id}", get(api::jobs::get))
+        .route("/{id}/cancel", post(api::jobs::cancel));
+
     let protected = Router::new()
         .nest("/v1/fs", fs)
+        .nest("/v1/jobs", jobs)
         .route("/auth/me", get(api::auth::me))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),

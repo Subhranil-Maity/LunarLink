@@ -2,9 +2,45 @@
 //! paths that were already resolved by [`crate::core::path::RootTable::resolve`].
 
 use crate::core::error::{LunarError, LunarResult};
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
-use std::path::Path;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
+
+/// Files at least this big are copied in chunks so progress and cancellation work mid-file.
+/// Smaller files use `fs::copy`, which can use fast OS paths (reflinks, `copy_file_range`).
+pub(crate) const CHUNKED_COPY_MIN: u64 = 64 * 1024 * 1024;
+const CHUNK: usize = 1024 * 1024;
+
+/// Follows a long copy or move, and can stop it.
+pub trait Tracker: Sync {
+    /// `false` skips progress reporting entirely, so plain copies keep the fastest OS paths.
+    fn wants_progress(&self) -> bool {
+        true
+    }
+    fn add_bytes(&self, _n: u64) {}
+    fn file_started(&self, _name: &str) {}
+    fn file_done(&self) {}
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+}
+
+/// For callers that don't need progress.
+pub struct NoTracker;
+
+impl Tracker for NoTracker {
+    fn wants_progress(&self) -> bool {
+        false
+    }
+}
+
+fn check_cancelled(tracker: &dyn Tracker) -> LunarResult<()> {
+    if tracker.is_cancelled() {
+        Err(LunarError::Cancelled)
+    } else {
+        Ok(())
+    }
+}
 
 /// Creates a new empty file. Fails with `AlreadyExists` if anything exists at `path`.
 pub fn create_file(path: &Path) -> LunarResult<()> {
@@ -45,7 +81,7 @@ pub fn write_file(path: &Path, data: &[u8], overwrite: bool) -> LunarResult<()> 
 pub fn copy(from: &Path, to: &Path, overwrite: bool) -> LunarResult<()> {
     check_transfer(from, to)?;
     prepare_destination(to, overwrite)?;
-    copy_any(from, to)
+    copy_any(from, to, &NoTracker)
 }
 
 /// Moves (or renames) a file, symlink or folder. Falls back to copy + delete
@@ -59,11 +95,141 @@ pub fn move_entry(from: &Path, to: &Path, overwrite: bool) -> LunarResult<()> {
     match fs::rename(from, to) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == io::ErrorKind::CrossesDevices => {
-            copy_any(from, to)?;
+            copy_any(from, to, &NoTracker)?;
             remove_any(from)
         }
         Err(e) => Err(e.into()),
     }
+}
+
+/// The checks a copy or move does before touching anything, so they can be reported right away
+/// when the work itself runs in the background.
+pub fn check_transfer_start(from: &Path, to: &Path, overwrite: bool) -> LunarResult<()> {
+    if from == to {
+        // Moving a path onto itself is a no-op; copying onto itself is rejected below.
+        fs::symlink_metadata(from)?;
+    } else {
+        check_transfer(from, to)?;
+    }
+    if !overwrite && from != to && exists_no_follow(to) {
+        return Err(LunarError::AlreadyExists);
+    }
+    Ok(())
+}
+
+/// Total bytes of files and the number of files below `path` (or of `path` itself). Symlinks count
+/// as files of size 0 because they are copied as links.
+pub fn measure(path: &Path, tracker: &dyn Tracker) -> LunarResult<(u64, u64)> {
+    let (mut bytes, mut files) = (0, 0);
+    for entry in walkdir::WalkDir::new(path).follow_links(false) {
+        check_cancelled(tracker)?;
+        let Ok(entry) = entry else { continue };
+        if entry.file_type().is_dir() {
+            continue;
+        }
+        files += 1;
+        if entry.file_type().is_file() {
+            bytes += entry.metadata().map(|m| m.len()).unwrap_or(0);
+        }
+    }
+    Ok((bytes, files))
+}
+
+/// Like [`copy`], with progress and cancellation. The copy is written next to `to` under a temporary
+/// name and only renamed into place when complete, so a cancelled or failed copy leaves no partial
+/// result, and with `overwrite` the old target survives until the new one is ready.
+pub fn copy_tracked(
+    from: &Path,
+    to: &Path,
+    overwrite: bool,
+    tracker: &dyn Tracker,
+) -> LunarResult<()> {
+    check_transfer_start(from, to, overwrite)?;
+    if from == to {
+        return Err(LunarError::InvalidOperation(
+            "The source and destination are the same.",
+        ));
+    }
+    let temp = temp_sibling(to)?;
+    if let Err(e) = copy_any(from, &temp, tracker) {
+        let _ = remove_any(&temp);
+        return Err(e);
+    }
+    replace_with(&temp, to, overwrite)
+}
+
+/// Like [`move_entry`], with progress and cancellation. A move within one device is a rename and
+/// finishes at once. Across devices the data is copied to a temporary name next to `to`, put in
+/// place, and only then is the source removed.
+pub fn move_tracked(
+    from: &Path,
+    to: &Path,
+    overwrite: bool,
+    tracker: &dyn Tracker,
+) -> LunarResult<()> {
+    check_transfer_start(from, to, overwrite)?;
+    if from == to {
+        return Ok(());
+    }
+    let temp = temp_sibling(to)?;
+    match fs::rename(from, &temp) {
+        Ok(()) => {
+            let (bytes, files) = measure(&temp, &NoTracker)?;
+            tracker.add_bytes(bytes);
+            for _ in 0..files {
+                tracker.file_done();
+            }
+            if let Err(e) = replace_with(&temp, to, overwrite) {
+                // Put the source back where it was.
+                let _ = fs::rename(&temp, from);
+                return Err(e);
+            }
+            Ok(())
+        }
+        Err(e) if e.kind() == io::ErrorKind::CrossesDevices => {
+            if let Err(e) = copy_any(from, &temp, tracker) {
+                let _ = remove_any(&temp);
+                return Err(e);
+            }
+            replace_with(&temp, to, overwrite)?;
+            remove_any(from)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// A free hidden name in `path`'s folder, e.g. `.photo.jpg.lunarpart-1a2b3c4d`.
+fn temp_sibling(path: &Path) -> LunarResult<PathBuf> {
+    let name = path
+        .file_name()
+        .ok_or(LunarError::InvalidPath)?
+        .to_string_lossy();
+    loop {
+        let candidate =
+            path.with_file_name(format!(".{name}.lunarpart-{:08x}", rand::random::<u32>()));
+        if !exists_no_follow(&candidate) {
+            return Ok(candidate);
+        }
+    }
+}
+
+/// Moves a finished `temp` onto `to`, removing an existing `to` first when `overwrite` allows it.
+fn replace_with(temp: &Path, to: &Path, overwrite: bool) -> LunarResult<()> {
+    if exists_no_follow(to) {
+        if !overwrite {
+            // Something appeared at the destination while we were copying.
+            let _ = remove_any(temp);
+            return Err(LunarError::AlreadyExists);
+        }
+        if let Err(e) = remove_any(to) {
+            let _ = remove_any(temp);
+            return Err(e);
+        }
+    }
+    fs::rename(temp, to).map_err(|e| {
+        let _ = remove_any(temp);
+        e.into()
+    })
 }
 
 /// Deletes `path`. Non-empty folders need `recursive`. Symlinks are removed, never followed.
@@ -113,20 +279,51 @@ fn prepare_destination(to: &Path, overwrite: bool) -> LunarResult<()> {
     Ok(())
 }
 
-fn copy_any(from: &Path, to: &Path) -> LunarResult<()> {
+fn copy_any(from: &Path, to: &Path, tracker: &dyn Tracker) -> LunarResult<()> {
     let meta = fs::symlink_metadata(from)?;
     if meta.is_symlink() {
-        copy_symlink(from, to)
-    } else if meta.is_dir() {
-        copy_dir(from, to)
-    } else {
-        fs::copy(from, to)?;
+        copy_symlink(from, to)?;
+        tracker.file_done();
         Ok(())
+    } else if meta.is_dir() {
+        copy_dir(from, to, tracker)
+    } else {
+        copy_file(from, to, meta.len(), tracker)
     }
 }
 
-fn copy_dir(from: &Path, to: &Path) -> LunarResult<()> {
+fn copy_file(from: &Path, to: &Path, len: u64, tracker: &dyn Tracker) -> LunarResult<()> {
+    check_cancelled(tracker)?;
+    if let Some(name) = from.file_name() {
+        tracker.file_started(&name.to_string_lossy());
+    }
+    if !tracker.wants_progress() || len < CHUNKED_COPY_MIN {
+        fs::copy(from, to)?;
+        tracker.add_bytes(len);
+    } else {
+        let mut input = File::open(from)?;
+        let mut output = File::create(to)?;
+        let mut buffer = vec![0; CHUNK];
+        loop {
+            check_cancelled(tracker)?;
+            let n = input.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            output.write_all(&buffer[..n])?;
+            tracker.add_bytes(n as u64);
+        }
+        output.flush()?;
+        // Keep the permissions, as fs::copy does.
+        fs::set_permissions(to, input.metadata()?.permissions())?;
+    }
+    tracker.file_done();
+    Ok(())
+}
+
+fn copy_dir(from: &Path, to: &Path, tracker: &dyn Tracker) -> LunarResult<()> {
     for entry in walkdir::WalkDir::new(from).follow_links(false) {
+        check_cancelled(tracker)?;
         let entry = entry.map_err(|e| match e.into_io_error() {
             Some(io) => LunarError::from(io),
             None => LunarError::Internal("filesystem loop while copying".into()),
@@ -139,10 +336,12 @@ fn copy_dir(from: &Path, to: &Path) -> LunarResult<()> {
         let file_type = entry.file_type();
         if file_type.is_symlink() {
             copy_symlink(entry.path(), &target)?;
+            tracker.file_done();
         } else if file_type.is_dir() {
             fs::create_dir(&target)?;
         } else {
-            fs::copy(entry.path(), &target)?;
+            let len = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            copy_file(entry.path(), &target, len, tracker)?;
         }
     }
     Ok(())

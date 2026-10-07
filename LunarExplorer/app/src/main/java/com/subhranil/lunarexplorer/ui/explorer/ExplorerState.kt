@@ -45,7 +45,20 @@ sealed interface ExplorerDialog {
     data object Sort : ExplorerDialog
 }
 
-data class Progress(val done: Int, val total: Int)
+enum class OperationKind { COPY, MOVE, DELETE }
+
+data class Progress(
+    val kind: OperationKind,
+    /** Items finished, out of [total]. */
+    val done: Int,
+    val total: Int,
+    /** The item being worked on. */
+    val currentName: String? = null,
+    /** Bytes of the current item, when the server reports them (copy/move jobs); 0 when unknown. */
+    val bytesDone: Long = 0,
+    val bytesTotal: Long = 0,
+    val cancelling: Boolean = false,
+)
 
 data class SearchState(
     val query: String = "",

@@ -359,21 +359,62 @@ fun ClipboardBar(
 }
 
 @Composable
-fun ProgressBar(progress: Progress) {
+fun ProgressBar(progress: Progress, onCancel: () -> Unit) {
+    val name = progress.currentName
+    val title = when {
+        progress.cancelling -> stringResource(R.string.explorer_cancelling)
+        name == null -> stringResource(R.string.explorer_working, progress.done, progress.total)
+        else -> stringResource(
+            when (progress.kind) {
+                OperationKind.COPY -> R.string.explorer_progress_copying
+                OperationKind.MOVE -> R.string.explorer_progress_moving
+                OperationKind.DELETE -> R.string.explorer_progress_deleting
+            },
+            name,
+        )
+    }
+    val details = listOfNotNull(
+        if (progress.bytesTotal > 0) {
+            stringResource(R.string.explorer_progress_bytes, formatBytes(progress.bytesDone), formatBytes(progress.bytesTotal))
+        } else {
+            null
+        },
+        if (progress.total > 1) stringResource(R.string.explorer_progress_items, minOf(progress.done + 1, progress.total), progress.total) else null,
+    ).joinToString(" · ")
+    // Bytes of the current item when the server reports them, otherwise finished items.
+    val fraction = when {
+        progress.bytesTotal > 0 -> (progress.done + progress.bytesDone.toFloat() / progress.bytesTotal) / progress.total
+        progress.total > 0 -> progress.done.toFloat() / progress.total
+        else -> 0f
+    }.coerceIn(0f, 1f)
+
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 3.dp) {
-        Column(
+        Row(
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(stringResource(R.string.explorer_working, progress.done, progress.total))
-            LinearProgressIndicator(
-                progress = { if (progress.total == 0) 0f else progress.done.toFloat() / progress.total },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp),
-            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(title, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
+                if (details.isNotEmpty()) {
+                    Text(
+                        details,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp),
+                )
+            }
+            TextButton(onClick = onCancel, enabled = !progress.cancelling, modifier = Modifier.padding(start = 8.dp)) {
+                Text(stringResource(R.string.action_cancel))
+            }
         }
     }
 }

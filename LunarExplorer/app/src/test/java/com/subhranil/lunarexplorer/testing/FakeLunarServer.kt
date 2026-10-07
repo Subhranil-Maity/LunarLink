@@ -33,7 +33,7 @@ class FakeLunarServer(
     val authRequired: Boolean = true,
     val rootPath: String = "/share",
     /** Optional features reported by `/api/info`. */
-    val features: Set<String> = setOf("search", "thumbnails"),
+    val features: Set<String> = setOf("search", "thumbnails", "jobs"),
 ) {
     /** Paths that exist; folders end up as keys with `true`. */
     val nodes = sortedMapOf(rootPath to true)
@@ -41,6 +41,22 @@ class FakeLunarServer(
         private set
     var validToken: String? = null
         private set
+
+    /** Polls a job reports `running` before it finishes. */
+    var jobSteps = 2
+
+    /** When set, jobs fail with this error code instead of finishing. */
+    var jobFailure: String? = null
+
+    /** Cancel requests seen, by job id. */
+    val cancelledJobs = mutableListOf<String>()
+
+    private class FakeJob(val id: String, val move: Boolean, val from: String, val to: String) {
+        var polls = 0
+        var state = "running"
+    }
+
+    private val jobs = mutableMapOf<String, FakeJob>()
 
     /** Query parameters of the latest `list` request. */
     var lastListParams: Map<String, String> = emptyMap()
@@ -173,6 +189,26 @@ class FakeLunarServer(
             if (header != "Bearer $validToken") return error(HttpStatusCode.Unauthorized, "TOKEN_EXPIRED")
         }
 
+        if (path.startsWith("/api/v1/jobs/") && path != "/api/v1/jobs/copy" && path != "/api/v1/jobs/move") {
+            val rest = path.removePrefix("/api/v1/jobs/")
+            val job = jobs[rest.removeSuffix("/cancel")] ?: return error(HttpStatusCode.NotFound, "NOT_FOUND")
+            if (rest.endsWith("/cancel")) {
+                cancelledJobs += job.id
+                if (job.state == "running") job.state = "cancelled"
+                return json(jobJson(job), HttpStatusCode.Accepted)
+            }
+            if (job.state == "running" && ++job.polls >= jobSteps) {
+                val failure = jobFailure
+                if (failure != null) {
+                    job.state = "failed"
+                } else {
+                    transfer(job.from, job.to, job.move)
+                    job.state = "done"
+                }
+            }
+            return json(jobJson(job))
+        }
+
         return when (path) {
             "/api/v1/fs/roots" -> json(
                 """{"roots":[{"name":"share","path":"$rootPath","kind":"mount","permissions":["read","write","delete"],"disk":null}]}"""
@@ -223,18 +259,23 @@ class FakeLunarServer(
                 nodes[target] = path.endsWith("dir")
                 json(entryJson(target), HttpStatusCode.Created)
             }
-            "/api/v1/fs/copy", "/api/v1/fs/move" -> {
+            "/api/v1/fs/copy", "/api/v1/fs/move", "/api/v1/jobs/copy", "/api/v1/jobs/move" -> {
+                val isJob = path.startsWith("/api/v1/jobs")
+                if (isJob && "jobs" !in features) return error(HttpStatusCode.NotFound, "NOT_FOUND")
+                val move = path.endsWith("move")
                 val b = body(request)
                 val from = b.str("from")
                 val to = b.str("to")
                 if (from !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")
                 if (from == to) return error(HttpStatusCode.BadRequest, "INVALID_OPERATION")
                 if (to in nodes && !b.bool("overwrite")) return error(HttpStatusCode.Conflict, "ALREADY_EXISTS")
-                removeTree(to)
-                val moved = nodes.filterKeys { it == from || it.startsWith("$from/") }
-                moved.forEach { (p, isDir) -> nodes[to + p.removePrefix(from)] = isDir }
-                if (path.endsWith("move")) removeTree(from)
-                json(entryJson(to), if (path.endsWith("copy")) HttpStatusCode.Created else HttpStatusCode.OK)
+                if (isJob) {
+                    val job = FakeJob("job-${jobs.size + 1}", move, from, to)
+                    jobs[job.id] = job
+                    return json(jobJson(job), HttpStatusCode.Accepted)
+                }
+                transfer(from, to, move)
+                json(entryJson(to), if (move) HttpStatusCode.OK else HttpStatusCode.Created)
             }
             "/api/v1/fs/delete" -> {
                 val b = body(request)
@@ -248,6 +289,22 @@ class FakeLunarServer(
             }
             else -> error(HttpStatusCode.NotFound, "NOT_FOUND")
         }
+    }
+
+    private fun jobJson(job: FakeJob): String {
+        val name = job.from.substringAfterLast('/')
+        val error = if (job.state == "failed") """{"code":"$jobFailure","message":"failed"}""" else "null"
+        val entry = if (job.state == "done") entryJson(job.to) else "null"
+        return """{"id":"${job.id}","kind":"${if (job.move) "move" else "copy"}","state":"${job.state}",""" +
+            """"from":"${job.from}","to":"${job.to}","bytes_total":${jobSteps * 10},"bytes_done":${job.polls * 10},""" +
+            """"files_total":1,"files_done":0,"current":"$name","entry":$entry,"error":$error,"started_at":1}"""
+    }
+
+    private fun transfer(from: String, to: String, move: Boolean) {
+        removeTree(to)
+        val moved = nodes.filterKeys { it == from || it.startsWith("$from/") }
+        moved.forEach { (p, isDir) -> nodes[to + p.removePrefix(from)] = isDir }
+        if (move) removeTree(from)
     }
 
     private fun removeTree(path: String) {

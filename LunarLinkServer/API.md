@@ -19,6 +19,7 @@
    - [Public](#public): `GET /`, `GET /api/info`
    - [Auth](#auth): `POST /api/auth/login`, `GET /api/auth/me`
    - [Filesystem](#filesystem): `roots`, `stat`, `list`, `search`, `download`, `thumbnail`, `file`, `dir`, `copy`, `move`, `delete`
+   - [Jobs](#jobs): background `copy` and `move` with progress and cancel
 6. [Configuration reference](#configuration-reference)
 
 ---
@@ -86,6 +87,7 @@ Every error response uses this shape:
 | 405 | *(no JSON body)* | Wrong HTTP method for an existing endpoint |
 | 416 | *(no JSON body)* | `Range` header can't be satisfied (download only) |
 | 415 | `THUMBNAIL_UNAVAILABLE` | No preview can be made: not a supported image, too big, damaged, or thumbnails are turned off |
+| 429 | `TOO_MANY_JOBS` | The user already has 8 jobs running |
 | 429 | `TOO_MANY_ATTEMPTS` | Login rate limit. `details.retry_after_seconds` is set, and so is the `Retry-After` header |
 | 500 | `TRASH_FAILED` | Moving to trash failed (e.g. no trash on this system). Retry with `permanent: true` |
 | 500 | `INTERNAL` | Anything unexpected. Details are logged on the server only |
@@ -134,9 +136,9 @@ user has no `read` on is hidden from `GET /roots` and inaccessible.
 | `roots` | none (only roots with `read` are returned) |
 | `stat`, `list`, `search`, `download`, `thumbnail` | `read` |
 | `file`, `dir` | `write` on the parent's root |
-| `copy` | `read` on the source root, `write` on the destination root |
-| `move` (same parent folder, i.e. rename) | `write` |
-| `move` (different folder) | `write` + `delete` on the source root, `write` on the destination root |
+| `copy`, copy jobs | `read` on the source root, `write` on the destination root |
+| `move`, move jobs (same parent folder, i.e. rename) | `write` |
+| `move`, move jobs (different folder) | `write` + `delete` on the source root, `write` on the destination root |
 | `delete` | `delete` |
 
 ---
@@ -221,15 +223,15 @@ Basic server details shown before connecting. No auth required.
   "server_version": "0.2.0",
   "api_version": 1,
   "auth_required": true,
-  "features": ["search", "thumbnails"]
+  "features": ["search", "jobs", "thumbnails"]
 }
 ```
 
 - `name` is `server.display_name` if set, otherwise the machine hostname. It is never the OS user name.
 - `os_type` is one of `linux`, `windows`, `macos`, etc.
 - `features` lists optional capabilities, so clients can hide what an older server doesn't support.
-  Unknown names should be ignored. Current values: `search` (`GET /api/v1/fs/search`) and
-  `thumbnails` (`GET /api/v1/fs/thumbnail`, absent when `thumbnails.enabled = false`).
+  Unknown names should be ignored. Current values: `search` (`GET /api/v1/fs/search`), `jobs`
+  (`/api/v1/jobs`) and `thumbnails` (`GET /api/v1/fs/thumbnail`, absent when `thumbnails.enabled = false`).
 
 ### Auth
 
@@ -451,6 +453,79 @@ Response `200`: the [Entry](#entry) at `to`.
 - A root can't be deleted (`400 INVALID_OPERATION`).
 
 Response `204`, no body.
+
+### Jobs
+
+Copies and moves of big folders can take minutes. Jobs run them in the background so clients can show
+progress and cancel. All job endpoints require auth (🔒), and each user only sees their own jobs.
+
+#### `POST /api/v1/jobs/copy` and `POST /api/v1/jobs/move`  🔒
+
+Same body, permissions and rules as [`copy`](#post-apiv1fscopy) and [`move`](#post-apiv1fsmove):
+
+```json
+{ "from": "/home/me/a", "to": "/mnt/backup/a", "overwrite": false }
+```
+
+- Everything that can be checked up front is answered **before** the job starts, with the same errors
+  as the plain endpoints: `ALREADY_EXISTS` (409), `INVALID_OPERATION`, `NOT_FOUND`, `PERMISSION_DENIED`, ...
+- The copy is written next to `to` under a hidden temporary name (`.<name>.lunarpart-<hex>`) and renamed
+  into place when complete. A cancelled or failed copy leaves nothing behind, and with `overwrite: true`
+  the old target is only removed once the new one is ready.
+- A move on the same disk is a rename and finishes at once. Across disks it is copied the same way,
+  then the source is removed.
+- A user can have at most 8 unfinished jobs (`429 TOO_MANY_JOBS`).
+
+Response `202`: the [Job](#job).
+
+#### `GET /api/v1/jobs/{id}`  🔒
+
+The [Job](#job). `404 NOT_FOUND` if it doesn't exist or belongs to another user. Finished jobs are kept
+for 10 minutes.
+
+#### `GET /api/v1/jobs`  🔒
+
+```json
+{ "jobs": [ /* Job, oldest first */ ] }
+```
+
+#### `POST /api/v1/jobs/{id}/cancel`  🔒
+
+Asks the job to stop. It stops within one file or 1 MiB chunk, cleans up, and ends in `cancelled`
+(or `done`, if it finished first). No body. Response `202`: the [Job](#job).
+
+#### Job
+
+```json
+{
+  "id": "5f0c2a9e1b7d4c33",
+  "kind": "copy",
+  "state": "running",
+  "from": "/home/me/a",
+  "to": "/mnt/backup/a",
+  "bytes_total": 4500000000,
+  "bytes_done": 1200000000,
+  "files_total": 812,
+  "files_done": 230,
+  "current": "IMG_2041.jpg",
+  "entry": null,
+  "error": null,
+  "started_at": 1759750000,
+  "finished_at": null
+}
+```
+
+| Field | Notes |
+|---|---|
+| `kind` | `"copy"` \| `"move"` |
+| `state` | `"preparing"` (counting files) \| `"running"` \| `"done"` \| `"failed"` \| `"cancelled"` |
+| `bytes_*`, `files_*` | Progress. Totals are known once `preparing` ends. Symlinks count as files of 0 bytes |
+| `current` | Name of the file being copied, while running |
+| `entry` | The [Entry](#entry) at `to` when `done` |
+| `error` | `{ "code", "message" }` when `failed`, using the codes from [Errors](#errors) |
+
+Jobs live in memory: they are lost when the server restarts, and a copy that was running then may leave
+a `.lunarpart-` file next to its destination.
 
 ---
 

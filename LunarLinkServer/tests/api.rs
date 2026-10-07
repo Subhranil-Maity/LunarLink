@@ -996,3 +996,178 @@ path = "{}"
         .await;
     assert_eq!(res.error_code(), "THUMBNAIL_UNAVAILABLE");
 }
+
+// ---------- jobs ----------
+
+impl TestServer {
+    /// Polls a job until it finishes.
+    async fn wait_job(&self, id: &str, token: &str) -> Value {
+        for _ in 0..200 {
+            let job = self
+                .get(&format!("/api/v1/jobs/{id}"), Some(token))
+                .await
+                .json();
+            if ["done", "failed", "cancelled"].contains(&job["state"].as_str().unwrap()) {
+                return job;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        panic!("job {id} did not finish");
+    }
+}
+
+#[tokio::test]
+async fn copy_and_move_jobs() {
+    let s = server(true);
+    let token = s.token("admin").await;
+    let share = s.share();
+    fs::create_dir_all(share.join("src/sub")).unwrap();
+    fs::write(share.join("src/a.txt"), "12345").unwrap();
+    fs::write(share.join("src/sub/b.txt"), "123").unwrap();
+
+    let res = s
+        .post(
+            "/api/v1/jobs/copy",
+            Some(&token),
+            json!({ "from": p(&share.join("src")), "to": p(&share.join("copy")) }),
+        )
+        .await;
+    assert_eq!(res.status, StatusCode::ACCEPTED);
+    let started = res.json();
+    assert_eq!(started["kind"], "copy");
+    let id = started["id"].as_str().unwrap().to_string();
+
+    let done = s.wait_job(&id, &token).await;
+    assert_eq!(done["state"], "done");
+    assert_eq!(done["bytes_total"], 8);
+    assert_eq!(done["bytes_done"], 8);
+    assert_eq!(done["files_done"], 2);
+    assert_eq!(done["entry"]["path"], p(&share.join("copy")));
+    assert_eq!(done["error"], Value::Null);
+    assert_eq!(
+        fs::read_to_string(share.join("copy/sub/b.txt")).unwrap(),
+        "123"
+    );
+
+    // Listed for the owner only.
+    let jobs = s.get("/api/v1/jobs", Some(&token)).await.json();
+    assert_eq!(jobs["jobs"].as_array().unwrap().len(), 1);
+    let reader = s.token("reader").await;
+    let theirs = s.get("/api/v1/jobs", Some(&reader)).await.json();
+    assert!(theirs["jobs"].as_array().unwrap().is_empty());
+    let res = s.get(&format!("/api/v1/jobs/{id}"), Some(&reader)).await;
+    assert_eq!(res.error_code(), "NOT_FOUND");
+
+    let res = s
+        .post(
+            "/api/v1/jobs/move",
+            Some(&token),
+            json!({ "from": p(&share.join("copy")), "to": p(&share.join("moved")) }),
+        )
+        .await;
+    assert_eq!(res.status, StatusCode::ACCEPTED);
+    let moved = s.wait_job(res.json()["id"].as_str().unwrap(), &token).await;
+    assert_eq!(moved["state"], "done");
+    assert!(!share.join("copy").exists());
+    assert!(share.join("moved/a.txt").exists());
+}
+
+#[tokio::test]
+async fn job_start_errors_are_synchronous() {
+    let s = server(true);
+    let token = s.token("admin").await;
+    let share = s.share();
+    fs::write(share.join("a.txt"), "a").unwrap();
+    fs::write(share.join("b.txt"), "b").unwrap();
+    let body =
+        |from: &str, to: &str| json!({ "from": p(&share.join(from)), "to": p(&share.join(to)) });
+
+    let res = s
+        .post("/api/v1/jobs/copy", Some(&token), body("a.txt", "b.txt"))
+        .await;
+    assert_eq!(res.status, StatusCode::CONFLICT);
+    assert_eq!(res.error_code(), "ALREADY_EXISTS");
+    let res = s
+        .post("/api/v1/jobs/copy", Some(&token), body("a.txt", "a.txt"))
+        .await;
+    assert_eq!(res.error_code(), "INVALID_OPERATION");
+    let res = s
+        .post("/api/v1/jobs/move", Some(&token), body("missing", "x"))
+        .await;
+    assert_eq!(res.error_code(), "NOT_FOUND");
+    let reader = s.token("reader").await;
+    let res = s
+        .post("/api/v1/jobs/copy", Some(&reader), body("a.txt", "c.txt"))
+        .await;
+    assert_eq!(res.error_code(), "PERMISSION_DENIED");
+    let res = s
+        .post("/api/v1/jobs/copy", None, body("a.txt", "c.txt"))
+        .await;
+    assert_eq!(res.error_code(), "UNAUTHENTICATED");
+
+    // Overwrite replaces the target.
+    let res = s
+        .post(
+            "/api/v1/jobs/copy",
+            Some(&token),
+            json!({ "from": p(&share.join("a.txt")), "to": p(&share.join("b.txt")), "overwrite": true }),
+        )
+        .await;
+    let done = s.wait_job(res.json()["id"].as_str().unwrap(), &token).await;
+    assert_eq!(done["state"], "done");
+    assert_eq!(fs::read_to_string(share.join("b.txt")).unwrap(), "a");
+    assert!(s.get("/api/info", None).await.json()["features"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("jobs")));
+}
+
+#[tokio::test]
+async fn jobs_can_be_cancelled() {
+    let s = server(true);
+    let token = s.token("admin").await;
+    let share = s.share();
+    // Enough data that the copy is still running when the cancel arrives.
+    fs::create_dir(share.join("big")).unwrap();
+    for i in 0..400 {
+        fs::write(share.join(format!("big/{i}.bin")), vec![7u8; 256 * 1024]).unwrap();
+    }
+    let res = s
+        .post(
+            "/api/v1/jobs/copy",
+            Some(&token),
+            json!({ "from": p(&share.join("big")), "to": p(&share.join("big-copy")) }),
+        )
+        .await;
+    let id = res.json()["id"].as_str().unwrap().to_string();
+    let res = s
+        .post(
+            &format!("/api/v1/jobs/{id}/cancel"),
+            Some(&token),
+            json!({}),
+        )
+        .await;
+    assert_eq!(res.status, StatusCode::ACCEPTED);
+    let job = s.wait_job(&id, &token).await;
+    // A very fast disk may finish first; either way nothing partial is left behind.
+    assert!(["cancelled", "done"].contains(&job["state"].as_str().unwrap()));
+    if job["state"] == "cancelled" {
+        assert!(!share.join("big-copy").exists());
+    }
+    let leftovers = fs::read_dir(&share)
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("lunarpart")
+        })
+        .count();
+    assert_eq!(leftovers, 0);
+
+    let res = s
+        .post("/api/v1/jobs/nope/cancel", Some(&token), json!({}))
+        .await;
+    assert_eq!(res.error_code(), "NOT_FOUND");
+}

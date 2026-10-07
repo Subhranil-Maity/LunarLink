@@ -103,6 +103,13 @@
     <string name="explorer_paste_here">Paste here</string>
     <string name="explorer_paste_not_allowed">You can\'t paste in this location</string>
     <string name="explorer_working">Working… %1$d of %2$d</string>
+    <string name="explorer_progress_copying">Copying %1$s</string>
+    <string name="explorer_progress_moving">Moving %1$s</string>
+    <string name="explorer_progress_deleting">Deleting %1$s</string>
+    <string name="explorer_progress_bytes">%1$s of %2$s</string>
+    <string name="explorer_progress_items">Item %1$d of %2$d</string>
+    <string name="explorer_cancelling">Cancelling…</string>
+    <string name="explorer_operation_cancelled">Cancelled</string>
     <string name="explorer_created">Created %1$s</string>
     <string name="explorer_renamed">Renamed to %1$s</string>
     <string name="explorer_into_itself">Can\'t put a folder inside itself</string>

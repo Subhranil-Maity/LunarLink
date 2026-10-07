@@ -23,6 +23,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentLength
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.CancellationException
@@ -120,6 +121,22 @@ class LunarApi(private val client: HttpClient, baseUrl: String) {
 
     suspend fun move(token: String?, from: String, to: String, overwrite: Boolean): ApiResult<Entry> = call {
         client.post("$baseUrl/api/v1/fs/move") { auth(token); json(TransferBody(from, to, overwrite)) }
+    }
+
+    suspend fun startCopyJob(token: String?, from: String, to: String, overwrite: Boolean): ApiResult<Job> = call {
+        client.post("$baseUrl/api/v1/jobs/copy") { auth(token); json(TransferBody(from, to, overwrite)) }
+    }
+
+    suspend fun startMoveJob(token: String?, from: String, to: String, overwrite: Boolean): ApiResult<Job> = call {
+        client.post("$baseUrl/api/v1/jobs/move") { auth(token); json(TransferBody(from, to, overwrite)) }
+    }
+
+    suspend fun job(token: String?, id: String): ApiResult<Job> = call {
+        client.get("$baseUrl/api/v1/jobs/${id.encodeURLPathPart()}") { auth(token) }
+    }
+
+    suspend fun cancelJob(token: String?, id: String): ApiResult<Job> = call {
+        client.post("$baseUrl/api/v1/jobs/${id.encodeURLPathPart()}/cancel") { auth(token) }
     }
 
     suspend fun delete(token: String?, path: String, permanent: Boolean, recursive: Boolean): ApiResult<Unit> =

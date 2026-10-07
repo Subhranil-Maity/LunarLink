@@ -21,6 +21,7 @@ import com.subhranil.lunarexplorer.ui.explorer.Connection
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerDialog
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerUiState
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerViewModel
+import com.subhranil.lunarexplorer.ui.explorer.OperationKind
 import com.subhranil.lunarexplorer.ui.Feedback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -323,6 +324,74 @@ class ExplorerViewModelTest {
         vm.await { it.progress == null && it.clipboard == null }
         assertFalse(server.nodes.keys.any { it.startsWith("/share/docs/docs") })
         assertFalse(server.requests.any { it.endsWith("/copy") })
+    }
+
+    private suspend fun clipboardIntoDocs(vm: ExplorerViewModel, names: Set<String>, move: Boolean = false) {
+        val share = openShare(vm)
+        val items = share.folder!!.items.filter { it.name in names }
+        if (move) vm.moveToClipboard(items) else vm.copyToClipboard(items)
+        vm.openEntry(share.folder.items.first { it.name == "docs" })
+        vm.await { it.folder?.path == "/share/docs" && it.folder.isLoading.not() }
+    }
+
+    @Test
+    fun pasteRunsServerJobsWithByteProgress() = runTest {
+        server.jobSteps = 3
+        val vm = viewModel()
+        clipboardIntoDocs(vm, setOf("a.txt"))
+        vm.paste()
+        val running = vm.await { (it.progress?.bytesTotal ?: 0) > 0 }.progress!!
+        assertEquals(OperationKind.COPY, running.kind)
+        assertEquals("a.txt", running.currentName)
+        assertEquals(30L, running.bytesTotal)
+        vm.await { it.progress == null && it.names()?.contains("a.txt") == true }
+        assertTrue(server.requests.contains("POST /api/v1/jobs/copy"))
+        assertFalse(server.requests.any { it.endsWith("/fs/copy") })
+    }
+
+    @Test
+    fun cancelStopsTheJobAndTheRemainingItems() = runTest {
+        server.jobSteps = 1_000_000
+        val vm = viewModel()
+        clipboardIntoDocs(vm, setOf("a.txt", ".hidden"))
+        vm.paste()
+        vm.await { (it.progress?.bytesDone ?: 0) > 0 }
+        vm.cancelOperation()
+        assertTrue(vm.state.value.progress!!.cancelling)
+        vm.await { it.progress == null }
+        assertEquals(listOf("job-1"), server.cancelledJobs)
+        // The second item was never started.
+        assertEquals(1, server.requests.count { it == "POST /api/v1/jobs/copy" })
+        assertFalse("/share/docs/.hidden" in server.nodes)
+    }
+
+    @Test
+    fun failedJobsAreReported() = runTest {
+        server.jobFailure = "SYSTEM_ACCESS_DENIED"
+        val vm = viewModel()
+        clipboardIntoDocs(vm, setOf("a.txt"), move = true)
+        val feedback = mutableListOf<Feedback>()
+        val collector = launch(Dispatchers.Default) { vm.feedback.collect { feedback += it } }
+        vm.paste()
+        vm.await { it.progress == null }
+        withContext(Dispatchers.Default) { withTimeout(5_000) { while (feedback.isEmpty()) delay(10) } }
+        collector.cancel()
+        assertEquals(listOf(Feedback.ERROR), feedback)
+        assertTrue("/share/a.txt" in server.nodes)
+    }
+
+    @Test
+    fun olderServersGetPlainCopies() = runTest {
+        val old = FakeLunarServer(features = emptySet()).file("/share/a.txt").dir("/share/docs")
+        val vm = viewModel(fake = old)
+        val share = openShare(vm)
+        vm.copyToClipboard(share.folder!!.items.filter { it.name == "a.txt" })
+        vm.openEntry(share.folder.items.first { it.name == "docs" })
+        vm.await { it.folder?.path == "/share/docs" && it.folder.isLoading.not() }
+        vm.paste()
+        vm.await { it.progress == null && it.names()?.contains("a.txt") == true }
+        assertTrue(old.requests.contains("POST /api/v1/fs/copy"))
+        assertFalse(old.requests.any { it.contains("/jobs") })
     }
 
     @Test

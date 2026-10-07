@@ -14,8 +14,8 @@ pub fn status_of(err: &LunarError) -> StatusCode {
         Unauthenticated | InvalidToken | TokenExpired | LoginFailed => StatusCode::UNAUTHORIZED,
         PermissionDenied | PathOutsideRoots | SystemAccessDenied => StatusCode::FORBIDDEN,
         NotFound => StatusCode::NOT_FOUND,
-        AlreadyExists | DirectoryNotEmpty => StatusCode::CONFLICT,
-        TooManyAttempts { .. } => StatusCode::TOO_MANY_REQUESTS,
+        AlreadyExists | DirectoryNotEmpty | Cancelled => StatusCode::CONFLICT,
+        TooManyAttempts { .. } | TooManyJobs => StatusCode::TOO_MANY_REQUESTS,
         ThumbnailUnavailable(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         TrashFailed(_) | Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }

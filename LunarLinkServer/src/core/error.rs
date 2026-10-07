@@ -43,6 +43,10 @@ pub enum LunarError {
     TrashFailed(String),
     #[error("thumbnail unavailable: {0}")]
     ThumbnailUnavailable(String),
+    #[error("cancelled")]
+    Cancelled,
+    #[error("too many jobs")]
+    TooManyJobs,
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -68,6 +72,8 @@ impl LunarError {
             Self::TooManyAttempts { .. } => "TOO_MANY_ATTEMPTS",
             Self::TrashFailed(_) => "TRASH_FAILED",
             Self::ThumbnailUnavailable(_) => "THUMBNAIL_UNAVAILABLE",
+            Self::Cancelled => "CANCELLED",
+            Self::TooManyJobs => "TOO_MANY_JOBS",
             Self::Internal(_) => "INTERNAL",
         }
     }
@@ -95,6 +101,8 @@ impl LunarError {
             }
             Self::TrashFailed(_) => "Could not move to trash. Try deleting permanently.".into(),
             Self::ThumbnailUnavailable(_) => "No preview is available for this file.".into(),
+            Self::Cancelled => "The operation was cancelled.".into(),
+            Self::TooManyJobs => "Too many operations are running. Wait for some to finish.".into(),
             Self::Internal(_) => "An internal error occurred.".into(),
         }
     }

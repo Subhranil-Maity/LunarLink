@@ -227,7 +227,7 @@ private fun ReadyContent(
         },
         bottomBar = {
             when {
-                state.progress != null -> ProgressBar(state.progress)
+                state.progress != null -> ProgressBar(state.progress, onCancel = viewModel::cancelOperation)
                 state.clipboard != null -> ClipboardBar(
                     clipboard = state.clipboard,
                     canPaste = folder != null && state.canWrite,

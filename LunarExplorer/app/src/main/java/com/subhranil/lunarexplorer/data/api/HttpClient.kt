@@ -2,7 +2,7 @@ package com.subhranil.lunarexplorer.data.api
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
@@ -14,7 +14,9 @@ val LunarJson = Json {
     explicitNulls = false
 }
 
-fun createHttpClient(engine: HttpClientEngine = Android.create()): HttpClient = HttpClient(engine) {
+// OkHttp rather than the HttpURLConnection-based Android engine: cancelling a request while its body is
+// being read (pausing a download, leaving a folder) crashes the Android engine but is safe with OkHttp.
+fun createHttpClient(engine: HttpClientEngine = OkHttp.create()): HttpClient = HttpClient(engine) {
     expectSuccess = false
     install(ContentNegotiation) { json(LunarJson) }
     install(HttpTimeout) {

@@ -1,7 +1,9 @@
 package com.subhranil.lunarexplorer.data.download
 
 import com.subhranil.lunarexplorer.data.api.Entry
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -32,6 +35,7 @@ class DownloadRepository(
     scope: CoroutineScope,
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     val records: StateFlow<List<DownloadRecord>?> = store.records.stateIn(scope, SharingStarted.Eagerly, null)
 
@@ -67,12 +71,12 @@ class DownloadRepository(
 
     suspend fun pause(id: String) {
         store.update { list -> list.map { if (it.id == id && it.isActive) it.copy(state = DownloadState.PAUSED) else it } }
-        jobs[id]?.cancelAndJoin()
+        stop(listOfNotNull(jobs[id]))
     }
 
     suspend fun pauseAll() {
         store.update { list -> list.map { if (it.isActive) it.copy(state = DownloadState.PAUSED) else it } }
-        jobs.values.toList().forEach { it.cancelAndJoin() }
+        stop(jobs.values.toList())
     }
 
     /** Resumes a paused download or retries a failed one. */
@@ -91,12 +95,15 @@ class DownloadRepository(
 
     /** Removes a download from the list. Unfinished downloads are stopped and their partial file deleted. */
     suspend fun remove(id: String) {
-        jobs[id]?.cancelAndJoin()
+        // Remove the record before stopping the transfer: a stopped transfer that still finds its record
+        // RUNNING puts it back in the queue, and the run would pick it up again.
         var removed: DownloadRecord? = null
         store.update { list ->
             removed = list.firstOrNull { it.id == id }
             list.filterNot { it.id == id }
         }
+        stop(listOfNotNull(jobs[id]))
+        // Only now is nothing writing to the file.
         removed?.takeIf { it.state != DownloadState.COMPLETED }?.contentUri?.let(files::delete)
         _liveBytes.update { it - id }
     }
@@ -120,6 +127,14 @@ class DownloadRepository(
             }.any { it.state == DownloadState.QUEUED }
         }
         if (pending) scheduler.schedule(restart = false)
+    }
+
+    /**
+     * Cancels transfers off the main thread: cancelling closes the HTTP stream, and the Android engine
+     * reads the socket while closing, which StrictMode forbids on the main thread.
+     */
+    private suspend fun stop(transfers: List<Job>) {
+        if (transfers.isNotEmpty()) withContext(io) { transfers.forEach { it.cancelAndJoin() } }
     }
 
     private suspend fun schedule() {
@@ -185,9 +200,13 @@ class DownloadRepository(
     }
 
     /** The transfer was stopped (paused, removed, or the system stopped the run). */
-    internal suspend fun interrupted(id: String, bytes: Long) = edit(id) {
-        val state = if (it.state == DownloadState.RUNNING) DownloadState.QUEUED else it.state
-        it.copy(state = state, bytesDone = bytes)
+    internal suspend fun interrupted(id: String, bytes: Long, contentUri: String?) {
+        val record = edit(id) {
+            val state = if (it.state == DownloadState.RUNNING) DownloadState.QUEUED else it.state
+            it.copy(state = state, bytesDone = bytes)
+        }
+        // Removed while starting, before the file was recorded: nobody else knows about the file.
+        if (record == null) contentUri?.let(files::delete)
     }
 
     private suspend fun edit(id: String, transform: (DownloadRecord) -> DownloadRecord): DownloadRecord? {

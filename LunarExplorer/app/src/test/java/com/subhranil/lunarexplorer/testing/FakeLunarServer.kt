@@ -11,6 +11,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
+import io.ktor.utils.io.writeFully
+import io.ktor.utils.io.writer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
@@ -49,6 +54,9 @@ class FakeLunarServer(
 
     /** Ignores `Range` and always sends the whole file, like a server without range support. */
     var ignoreRange = false
+
+    /** Streams download bodies in small chunks with a pause between them, like a slow network. */
+    var slowDownloads = false
 
     /** Sends only this many bytes of the next download, then closes the body, like a dropped connection. */
     var truncateNextDownloadAt: Int? = null
@@ -106,6 +114,17 @@ class FakeLunarServer(
         truncateNextDownloadAt?.let {
             body = body.copyOf(it)
             truncateNextDownloadAt = null
+        }
+        if (slowDownloads) {
+            val chunks = body.toList().chunked(1024).map { it.toByteArray() }
+            val channel = CoroutineScope(Dispatchers.Default).writer {
+                for (chunk in chunks) {
+                    channel.writeFully(chunk)
+                    channel.flush()
+                    delay(20)
+                }
+            }.channel
+            return respond(channel, if (start != null) HttpStatusCode.PartialContent else HttpStatusCode.OK)
         }
         return if (start != null) {
             respond(

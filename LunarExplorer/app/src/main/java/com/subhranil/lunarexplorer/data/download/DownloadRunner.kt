@@ -87,7 +87,7 @@ class DownloadRunner(
             }
             finish(record, engine.run(session, record, tracker), deferred)
         } catch (e: CancellationException) {
-            withContext(NonCancellable) { repository.interrupted(record.id, tracker.bytes) }
+            withContext(NonCancellable) { repository.interrupted(record.id, tracker.bytes, tracker.contentUri) }
             throw e
         }
     }
@@ -121,11 +121,16 @@ class DownloadRunner(
         @Volatile
         var bytes: Long = start
             private set
+
+        @Volatile
+        var contentUri: String? = null
+            private set
         private var savedBytes = start
         private var savedAt = now()
         private var reportedAt = 0L
 
         override suspend fun onStart(contentUri: String, size: Long, modified: Long?, offset: Long) {
+            this.contentUri = contentUri
             bytes = offset
             savedBytes = offset
             savedAt = now()

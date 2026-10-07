@@ -42,8 +42,8 @@ class MainDispatcherRule(val dispatcher: TestDispatcher = UnconfinedTestDispatch
 }
 
 /** In-memory [DownloadFiles]; uris are "mem://<n>". */
-class FakeDownloadFiles : DownloadFiles {
-    val files = mutableMapOf<String, ByteArray>()
+class FakeDownloadFiles(private val writeDelayMs: Long = 0) : DownloadFiles {
+    val files = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
     val names = mutableMapOf<String, String>()
     val published = mutableSetOf<String>()
     private var next = 0
@@ -55,13 +55,14 @@ class FakeDownloadFiles : DownloadFiles {
         return uri
     }
 
-    override fun exists(uri: String) = uri in files
+    override fun exists(uri: String) = files.containsKey(uri)
 
     override fun open(uri: String, offset: Long): DownloadWriter {
         val start = files.getValue(uri).copyOf(offset.toInt())
         val out = ByteArrayOutputStream().apply { write(start) }
         return object : DownloadWriter {
             override fun write(buffer: ByteArray, length: Int) {
+                if (writeDelayMs > 0) Thread.sleep(writeDelayMs)
                 out.write(buffer, 0, length)
                 files[uri] = out.toByteArray()
             }

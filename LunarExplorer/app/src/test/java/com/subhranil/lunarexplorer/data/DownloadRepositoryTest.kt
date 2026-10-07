@@ -19,6 +19,11 @@ import com.subhranil.lunarexplorer.testing.FakeScheduler
 import com.subhranil.lunarexplorer.testing.RecordingNotifier
 import com.subhranil.lunarexplorer.testing.tempDataStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -182,5 +187,72 @@ class DownloadRepositoryTest {
         repo.recoverInterrupted()
         assertEquals(DownloadState.RUNNING, record("d0").state)
         assertEquals(1, scheduler.calls)
+    }
+
+    @Test
+    fun removeStopsARunningTransfer() = runTest {
+        val repo = repository(backgroundScope)
+        server.file("/share/slow.bin", ByteArray(200_000) { 1 })
+        server.slowDownloads = true
+        repo.enqueue("server", "Fake", listOf(entry("slow.bin", size = 200_000)))
+        val runner = runner(repo)
+
+        val run = async(Dispatchers.Default) { runner.run() }
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000) { repo.liveBytes.first { (it["d0"] ?: 0) > 0 } }
+        }
+        repo.remove("d0")
+
+        withContext(Dispatchers.Default) { withTimeout(5_000) { run.await() } }
+        assertTrue(store.current().isEmpty())
+        assertTrue(notifier.failed.isEmpty())
+        assertTrue(files.files.isEmpty())
+        // The stopped transfer must not be queued again and restarted.
+        assertEquals(1, server.downloadRanges.size)
+    }
+
+    @Test
+    fun pauseStopsARunningTransfer() = runTest {
+        val repo = repository(backgroundScope)
+        server.file("/share/slow.bin", ByteArray(200_000) { 1 })
+        server.slowDownloads = true
+        repo.enqueue("server", "Fake", listOf(entry("slow.bin", size = 200_000)))
+        val runner = runner(repo)
+
+        val run = async(Dispatchers.Default) { runner.run() }
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000) { repo.liveBytes.first { (it["d0"] ?: 0) > 0 } }
+        }
+        repo.pause("d0")
+
+        withContext(Dispatchers.Default) { withTimeout(5_000) { run.await() } }
+        val r = record("d0")
+        assertEquals(DownloadState.PAUSED, r.state)
+        assertTrue(r.bytesDone in 1 until 200_000)
+        assertTrue(notifier.failed.isEmpty())
+    }
+
+    @Test
+    fun removeStopsATransferWhoseDataIsAlreadyBuffered() = runTest {
+        // The whole body is available at once, so reads never suspend; only slow disk writes pace the loop.
+        val slowFiles = FakeDownloadFiles(writeDelayMs = 20)
+        val repo = DownloadRepository(store, slowFiles, scheduler, backgroundScope, newId = { "d${ids++}" })
+        server.file("/share/big.bin", ByteArray(4_000_000) { 1 })
+        repo.enqueue("server", "Fake", listOf(entry("big.bin", size = 4_000_000)))
+        val servers = ServerRepository(tempDataStore(), FakeCipher(), newId = { "server" })
+        servers.add(ServerDraft("Fake", "http://fake", "user", "pw", "linux"))
+        val runner = DownloadRunner(repo, DownloadEngine(slowFiles), DownloadSessions(servers) { server.api() }, notifier)
+
+        val run = async(Dispatchers.Default) { runner.run() }
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000) { repo.liveBytes.first { (it["d0"] ?: 0) > 0 } }
+        }
+        withContext(Dispatchers.Default) { withTimeout(2_000) { repo.remove("d0") } }
+
+        withContext(Dispatchers.Default) { withTimeout(2_000) { run.await() } }
+        assertTrue(store.current().isEmpty())
+        assertTrue(notifier.failed.isEmpty())
+        assertTrue(notifier.completed.isEmpty())
+        assertTrue(slowFiles.files.isEmpty())
     }
 }

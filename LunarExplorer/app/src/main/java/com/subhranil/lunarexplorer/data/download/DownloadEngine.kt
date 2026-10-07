@@ -10,6 +10,8 @@ import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 sealed interface DownloadOutcome {
@@ -103,6 +105,8 @@ class DownloadEngine(
         writer.use {
             val buffer = ByteArray(BUFFER_SIZE)
             while (true) {
+                // readAvailable doesn't suspend while data is buffered, so check for pause/cancel explicitly.
+                currentCoroutineContext().ensureActive()
                 val read = response.body.readAvailable(buffer, 0, buffer.size)
                 if (read < 0) break
                 if (read == 0) continue

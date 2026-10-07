@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.subhranil.lunarexplorer.R
 import com.subhranil.lunarexplorer.ui.components.MessageView
+import com.subhranil.lunarexplorer.ui.downloads.DownloadsButton
 import com.subhranil.lunarexplorer.ui.resolve
 import org.koin.androidx.compose.koinViewModel
 
@@ -46,6 +47,8 @@ import org.koin.androidx.compose.koinViewModel
 fun HomeScreen(
     onOpenServer: (serverId: String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    activeDownloads: Int,
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -62,6 +65,7 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.home_title)) },
                 actions = {
+                    DownloadsButton(activeDownloads, onClick = onOpenDownloads)
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.action_settings))
                     }

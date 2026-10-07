@@ -139,12 +139,7 @@ fun SettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = koinViewMo
                 item {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.app_name)) },
-                        supportingContent = {
-                            Column {
-                                Text(stringResource(R.string.settings_version, version))
-                                Text(stringResource(R.string.settings_downloads_note))
-                            }
-                        },
+                        supportingContent = { Text(stringResource(R.string.settings_version, version)) },
                     )
                 }
             }

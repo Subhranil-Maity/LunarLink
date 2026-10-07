@@ -19,7 +19,8 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * An in-memory LunarLink server behind Ktor's MockEngine. Implements the parts of the API the app
- * uses, following API.md: auth, roots, list, create, copy, move, delete and error envelopes.
+ * uses, following API.md: auth, roots, stat, list, download (with Range), create, copy, move, delete and
+ * error envelopes.
  */
 class FakeLunarServer(
     val username: String = "user",
@@ -37,7 +38,26 @@ class FakeLunarServer(
     /** Requests seen, as "METHOD /path". */
     val requests = mutableListOf<String>()
 
+    /** File contents; files without an entry here are 10 zero bytes. */
+    val contents = mutableMapOf<String, ByteArray>()
+
+    /** Modification times; the default is 1700000000. */
+    val modified = mutableMapOf<String, Long>()
+
+    /** `Range` headers of download requests, `null` when none was sent. */
+    val downloadRanges = mutableListOf<String?>()
+
+    /** Ignores `Range` and always sends the whole file, like a server without range support. */
+    var ignoreRange = false
+
+    /** Sends only this many bytes of the next download, then closes the body, like a dropped connection. */
+    var truncateNextDownloadAt: Int? = null
+
     fun file(path: String) = apply { nodes[path] = false }
+    fun file(path: String, content: ByteArray) = apply {
+        nodes[path] = false
+        contents[path] = content
+    }
     fun dir(path: String) = apply { nodes[path] = true }
 
     /** Makes the current token invalid, like the server's expiry. */
@@ -66,8 +86,36 @@ class FakeLunarServer(
     private fun entryJson(path: String): String {
         val isDir = nodes[path] == true
         val name = path.substringAfterLast('/')
-        return """{"name":"$name","path":"$path","kind":"${if (isDir) "dir" else "file"}","size":${if (isDir) 0 else 10},""" +
-            """"modified":1700000000,"hidden":${name.startsWith(".")},"unknown_future_field":42}"""
+        val size = if (isDir) 0 else bytes(path).size
+        return """{"name":"$name","path":"$path","kind":"${if (isDir) "dir" else "file"}","size":$size,""" +
+            """"modified":${modified[path] ?: 1700000000},"hidden":${name.startsWith(".")},"unknown_future_field":42}"""
+    }
+
+    private fun bytes(path: String) = contents[path] ?: ByteArray(10)
+
+    private fun MockRequestHandleScope.download(request: HttpRequestData): HttpResponseData {
+        val path = request.url.parameters["path"]!!
+        if (path !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")
+        if (nodes[path] == true) return error(HttpStatusCode.BadRequest, "IS_A_DIRECTORY")
+        val data = bytes(path)
+        val range = request.headers[HttpHeaders.Range]
+        downloadRanges += range
+        val start = range?.takeUnless { ignoreRange }?.removePrefix("bytes=")?.removeSuffix("-")?.toInt()
+        if (start != null && start >= data.size) return respond(ByteArray(0), HttpStatusCode.RequestedRangeNotSatisfiable)
+        var body = if (start != null) data.copyOfRange(start, data.size) else data
+        truncateNextDownloadAt?.let {
+            body = body.copyOf(it)
+            truncateNextDownloadAt = null
+        }
+        return if (start != null) {
+            respond(
+                body,
+                HttpStatusCode.PartialContent,
+                headersOf(HttpHeaders.ContentRange, "bytes $start-${data.size - 1}/${data.size}"),
+            )
+        } else {
+            respond(body, HttpStatusCode.OK)
+        }
     }
 
     private fun children(path: String) = nodes.keys.filter { it.substringBeforeLast('/').ifEmpty { "/" } == path && it != path }
@@ -103,6 +151,12 @@ class FakeLunarServer(
             "/api/v1/fs/roots" -> json(
                 """{"roots":[{"name":"share","path":"$rootPath","kind":"mount","permissions":["read","write","delete"],"disk":null}]}"""
             )
+            "/api/v1/fs/stat" -> {
+                val target = request.url.parameters["path"]!!
+                if (target !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")
+                json(entryJson(target))
+            }
+            "/api/v1/fs/download" -> download(request)
             "/api/v1/fs/list" -> {
                 val dir = request.url.parameters["path"]!!
                 if (dir !in nodes) return error(HttpStatusCode.NotFound, "NOT_FOUND")

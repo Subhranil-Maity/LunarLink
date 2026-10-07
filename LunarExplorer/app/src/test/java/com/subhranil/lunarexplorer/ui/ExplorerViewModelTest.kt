@@ -1,11 +1,15 @@
 package com.subhranil.lunarexplorer.ui
 
+import com.subhranil.lunarexplorer.data.download.DownloadRepository
+import com.subhranil.lunarexplorer.data.download.DownloadStore
 import com.subhranil.lunarexplorer.data.servers.ServerDraft
 import com.subhranil.lunarexplorer.data.servers.ServerRepository
 import com.subhranil.lunarexplorer.data.session.SessionManager
 import com.subhranil.lunarexplorer.data.settings.SettingsRepository
 import com.subhranil.lunarexplorer.testing.FakeCipher
+import com.subhranil.lunarexplorer.testing.FakeDownloadFiles
 import com.subhranil.lunarexplorer.testing.FakeLunarServer
+import com.subhranil.lunarexplorer.testing.FakeScheduler
 import com.subhranil.lunarexplorer.testing.MainDispatcherRule
 import com.subhranil.lunarexplorer.testing.tempDataStore
 import com.subhranil.lunarexplorer.ui.explorer.ClipboardMode
@@ -14,6 +18,7 @@ import com.subhranil.lunarexplorer.ui.explorer.Connection
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerDialog
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerUiState
 import com.subhranil.lunarexplorer.ui.explorer.ExplorerViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -42,11 +47,14 @@ class ExplorerViewModelTest {
 
     private fun ExplorerUiState.names() = folder?.items?.map { it.name }
 
+    private val downloadStore = DownloadStore(tempDataStore())
+    private val downloads = DownloadRepository(downloadStore, FakeDownloadFiles(), FakeScheduler(), CoroutineScope(Dispatchers.Default))
+
     private fun viewModel(password: String = "pw"): ExplorerViewModel {
         val repo = ServerRepository(tempDataStore(), FakeCipher())
         val id = runBlocking { repo.add(ServerDraft("Fake", "http://fake", "user", password, "linux")) }
         val sessions = SessionManager(repo, { server.api() })
-        return ExplorerViewModel(id, sessions, SettingsRepository(tempDataStore()))
+        return ExplorerViewModel(id, sessions, SettingsRepository(tempDataStore()), downloads)
     }
 
     private suspend fun openShare(vm: ExplorerViewModel): ExplorerUiState {
@@ -208,5 +216,21 @@ class ExplorerViewModelTest {
         vm.delete(share.folder!!.items.filter { it.name == "docs" }, permanent = true)
         vm.await { it.progress == null && it.names()?.contains("docs") == false }
         assertFalse(server.nodes.keys.any { it.startsWith("/share/docs") })
+    }
+
+    @Test
+    fun downloadQueuesFilesAndSkipsFolders() = runTest {
+        val vm = viewModel()
+        val share = openShare(vm)
+        vm.toggleSelection(share.folder!!.items.single { it.name == "a.txt" })
+        vm.toggleSelection(share.folder.items.single { it.name == "docs" })
+        vm.download(vm.state.value.selectedEntries)
+
+        val queued = withContext(Dispatchers.Default) {
+            withTimeout(5_000) { downloadStore.records.first { it.isNotEmpty() } }
+        }
+        assertEquals(listOf("/share/a.txt"), queued.map { it.remotePath })
+        assertEquals("Fake", queued.single().serverName)
+        assertTrue(vm.state.value.selection.isEmpty())
     }
 }

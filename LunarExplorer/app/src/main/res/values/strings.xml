@@ -90,7 +90,8 @@
     <string name="explorer_rename">Rename</string>
     <string name="explorer_details">Details</string>
     <string name="explorer_download">Download</string>
-    <string name="explorer_downloads_disabled">Downloads are temporarily disabled</string>
+    <string name="explorer_download_folders_skipped">Folders can\'t be downloaded, so they were skipped</string>
+    <string name="explorer_download_folders_only">Folders can\'t be downloaded. Select files instead.</string>
     <string name="explorer_paste_here">Paste here</string>
     <string name="explorer_paste_not_allowed">You can\'t paste in this location</string>
     <string name="explorer_working">Working… %1$d of %2$d</string>
@@ -148,7 +149,34 @@
     <string name="settings_servers_removed">All servers removed</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>
-    <string name="settings_downloads_note">Downloads are temporarily disabled while they are being redesigned.</string>
+
+    <!-- Downloads -->
+    <string name="downloads_title">Downloads</string>
+    <string name="downloads_empty_title">No downloads</string>
+    <string name="downloads_empty_body">Files you download from a server show up here. They are saved in Download/Lunar.</string>
+    <string name="downloads_section_active">In progress</string>
+    <string name="downloads_section_paused">Paused</string>
+    <string name="downloads_section_failed">Failed</string>
+    <string name="downloads_section_completed">Completed</string>
+    <string name="downloads_queued">Waiting</string>
+    <string name="downloads_waiting_network">Waiting for the server · %1$s</string>
+    <string name="downloads_bytes_of">%1$s of %2$s</string>
+    <string name="downloads_speed">%1$s/s</string>
+    <string name="downloads_eta">%1$s left</string>
+    <string name="downloads_pause">Pause</string>
+    <string name="downloads_pause_all">Pause all</string>
+    <string name="downloads_resume">Resume</string>
+    <string name="downloads_retry">Retry</string>
+    <string name="downloads_cancel">Cancel download</string>
+    <string name="downloads_remove">Remove from list</string>
+    <string name="downloads_clear_finished">Clear completed</string>
+    <string name="downloads_open_failed">No app on this device can open this file</string>
+    <string name="error_storage">Couldn\'t save the file: %1$s</string>
+    <string name="notification_channel_progress">Download progress</string>
+    <string name="notification_channel_results">Finished downloads</string>
+    <string name="notification_downloads_starting">Starting downloads…</string>
+    <string name="notification_download_complete">Downloaded. Tap to open.</string>
+    <string name="notification_download_failed">Download failed. Tap for details.</string>
 
 
     <!-- Plurals -->
@@ -179,6 +207,14 @@
     <plurals name="explorer_done_partial">
         <item quantity="one">%1$d item failed: %2$s</item>
         <item quantity="other">%1$d items failed: %2$s</item>
+    </plurals>
+    <plurals name="explorer_download_started">
+        <item quantity="one">Downloading %1$d file</item>
+        <item quantity="other">Downloading %1$d files</item>
+    </plurals>
+    <plurals name="notification_downloading">
+        <item quantity="one">Downloading %1$d file</item>
+        <item quantity="other">Downloading %1$d files</item>
     </plurals>
     <plurals name="dialog_delete_title_many">
         <item quantity="one">Delete %1$d item?</item>

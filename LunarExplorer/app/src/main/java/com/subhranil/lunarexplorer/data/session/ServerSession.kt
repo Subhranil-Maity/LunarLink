@@ -1,6 +1,7 @@
 package com.subhranil.lunarexplorer.data.session
 
 import com.subhranil.lunarexplorer.data.api.ApiResult
+import com.subhranil.lunarexplorer.data.api.DownloadResponse
 import com.subhranil.lunarexplorer.data.api.Entry
 import com.subhranil.lunarexplorer.data.api.ErrorCode
 import com.subhranil.lunarexplorer.data.api.ListQuery
@@ -55,6 +56,10 @@ class ServerSession private constructor(
 
     suspend fun delete(path: String, permanent: Boolean, recursive: Boolean): ApiResult<Unit> =
         authed { api.delete(it, path, permanent, recursive) }
+
+    /** Streams [path] from [offset]; see [LunarApi.download]. Logs in again if the token expired. */
+    suspend fun download(path: String, offset: Long, consume: suspend (DownloadResponse) -> Unit): ApiResult<Unit> =
+        authed { api.download(it, path, offset, consume) }
 
     private suspend fun <T> authed(block: suspend (token: String?) -> ApiResult<T>): ApiResult<T> {
         if (!info.authRequired) return block(null)

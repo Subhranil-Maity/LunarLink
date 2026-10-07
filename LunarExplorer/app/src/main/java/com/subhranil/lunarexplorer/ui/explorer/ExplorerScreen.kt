@@ -73,6 +73,8 @@ import com.subhranil.lunarexplorer.data.api.Entry
 import com.subhranil.lunarexplorer.ui.asString
 import com.subhranil.lunarexplorer.ui.components.LoadingView
 import com.subhranil.lunarexplorer.ui.components.MessageView
+import com.subhranil.lunarexplorer.ui.downloads.DownloadsButton
+import com.subhranil.lunarexplorer.ui.downloads.rememberNotificationPermissionRequest
 import com.subhranil.lunarexplorer.ui.resolve
 import com.subhranil.lunarexplorer.ui.settings.SortDialog
 import com.subhranil.lunarexplorer.util.ServerPaths
@@ -82,8 +84,18 @@ import kotlinx.coroutines.flow.filter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExplorerScreen(viewModel: ExplorerViewModel, onExit: () -> Unit) {
+fun ExplorerScreen(
+    viewModel: ExplorerViewModel,
+    activeDownloads: Int,
+    onExit: () -> Unit,
+    onOpenDownloads: () -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val requestNotifications = rememberNotificationPermissionRequest()
+    val download: (List<Entry>) -> Unit = { entries ->
+        requestNotifications()
+        viewModel.download(entries)
+    }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     LaunchedEffect(viewModel) { viewModel.messages.collect { snackbar.showSnackbar(it.resolve(context)) } }
@@ -129,10 +141,20 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, onExit: () -> Unit) {
                 },
             )
         }
-        Connection.Ready -> ReadyContent(state, viewModel, snackbar, twoPane, backProgress, onExit)
+        Connection.Ready -> ReadyContent(
+            state = state,
+            viewModel = viewModel,
+            snackbar = snackbar,
+            twoPane = twoPane,
+            backProgress = backProgress,
+            activeDownloads = activeDownloads,
+            onExit = onExit,
+            onOpenDownloads = onOpenDownloads,
+            onDownload = download,
+        )
     }
 
-    Dialogs(state, viewModel)
+    Dialogs(state, viewModel, onDownload = download)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -160,16 +182,19 @@ private fun ReadyContent(
     snackbar: SnackbarHostState,
     twoPane: Boolean,
     backProgress: Float,
+    activeDownloads: Int,
     onExit: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onDownload: (List<Entry>) -> Unit,
 ) {
     val folder = state.folder
     Scaffold(
         topBar = {
             Column {
                 when {
-                    state.isSelecting -> SelectionTopBar(state, viewModel)
+                    state.isSelecting -> SelectionTopBar(state, viewModel, onDownload)
                     state.searchQuery != null -> SearchTopBar(state.searchQuery, viewModel)
-                    else -> MainTopBar(state, viewModel, onExit)
+                    else -> MainTopBar(state, viewModel, activeDownloads, onExit, onOpenDownloads)
                 }
                 if (folder != null && state.root != null) {
                     BreadcrumbBar(
@@ -252,7 +277,13 @@ private fun ReadyContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MainTopBar(state: ExplorerUiState, viewModel: ExplorerViewModel, onExit: () -> Unit) {
+private fun MainTopBar(
+    state: ExplorerUiState,
+    viewModel: ExplorerViewModel,
+    activeDownloads: Int,
+    onExit: () -> Unit,
+    onOpenDownloads: () -> Unit,
+) {
     val folder = state.folder
     var menu by remember { mutableStateOf(false) }
     TopAppBar(
@@ -293,6 +324,7 @@ private fun MainTopBar(state: ExplorerUiState, viewModel: ExplorerViewModel, onE
                     Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.explorer_sort))
                 }
             }
+            DownloadsButton(activeDownloads, onClick = onOpenDownloads)
             Box {
                 IconButton(onClick = { menu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.action_more))
@@ -356,7 +388,7 @@ private fun SearchTopBar(query: String, viewModel: ExplorerViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectionTopBar(state: ExplorerUiState, viewModel: ExplorerViewModel) {
+private fun SelectionTopBar(state: ExplorerUiState, viewModel: ExplorerViewModel, onDownload: (List<Entry>) -> Unit) {
     val selected = state.selectedEntries
     TopAppBar(
         navigationIcon = {
@@ -368,6 +400,11 @@ private fun SelectionTopBar(state: ExplorerUiState, viewModel: ExplorerViewModel
         actions = {
             IconButton(onClick = viewModel::selectAll) {
                 Icon(painterResource(R.drawable.ic_select_all), contentDescription = stringResource(R.string.explorer_select_all))
+            }
+            if (selected.any { !it.isDirLike }) {
+                IconButton(onClick = { onDownload(selected) }) {
+                    Icon(painterResource(R.drawable.download_icon), contentDescription = stringResource(R.string.explorer_download))
+                }
             }
             IconButton(onClick = { viewModel.copyToClipboard(selected) }) {
                 Icon(painterResource(R.drawable.copy_icon), contentDescription = stringResource(R.string.explorer_copy), Modifier.size(24.dp))
@@ -481,7 +518,7 @@ private fun FolderPane(
 }
 
 @Composable
-private fun Dialogs(state: ExplorerUiState, viewModel: ExplorerViewModel) {
+private fun Dialogs(state: ExplorerUiState, viewModel: ExplorerViewModel, onDownload: (List<Entry>) -> Unit) {
     val existingNames = remember(state.folder?.items) { state.folder?.items.orEmpty().map { it.name }.toSet() }
     when (val dialog = state.dialog) {
         null -> Unit
@@ -526,7 +563,7 @@ private fun Dialogs(state: ExplorerUiState, viewModel: ExplorerViewModel) {
             onCopy = { viewModel.copyToClipboard(listOf(dialog.entry)) },
             onMove = { viewModel.moveToClipboard(listOf(dialog.entry)) },
             onDelete = { viewModel.showDialog(ExplorerDialog.Delete(listOf(dialog.entry))) },
-            onDownload = viewModel::downloadDisabled,
+            onDownload = { onDownload(listOf(dialog.entry)) },
         )
     }
 }

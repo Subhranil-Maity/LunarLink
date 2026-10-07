@@ -14,6 +14,7 @@ import com.subhranil.lunarexplorer.data.api.Root
 import com.subhranil.lunarexplorer.data.api.SortKey
 import com.subhranil.lunarexplorer.data.api.SortOrder
 import com.subhranil.lunarexplorer.data.api.errorOrNull
+import com.subhranil.lunarexplorer.data.download.DownloadRepository
 import com.subhranil.lunarexplorer.data.api.hasCode
 import com.subhranil.lunarexplorer.data.session.ServerSession
 import com.subhranil.lunarexplorer.data.session.SessionManager
@@ -39,6 +40,7 @@ class ExplorerViewModel(
     private val serverId: String,
     private val sessions: SessionManager,
     private val settings: SettingsRepository,
+    private val downloads: DownloadRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ExplorerUiState())
@@ -254,9 +256,21 @@ class ExplorerViewModel(
         }
     }
 
-    fun downloadDisabled() {
-        dismissDialog()
-        viewModelScope.launch { _messages.send(uiText(R.string.explorer_downloads_disabled)) }
+    // ---------- downloads ----------
+
+    /** Queues the files among [entries] for download. Folders are skipped. */
+    fun download(entries: List<Entry>) {
+        val files = entries.filterNot { it.isDirLike }
+        _state.update { it.copy(dialog = null, selection = emptySet()) }
+        viewModelScope.launch {
+            if (files.isEmpty()) {
+                _messages.send(uiText(R.string.explorer_download_folders_only))
+                return@launch
+            }
+            downloads.enqueue(serverId, _state.value.serverName, files)
+            _messages.send(pluralText(R.plurals.explorer_download_started, files.size))
+            if (files.size < entries.size) _messages.send(uiText(R.string.explorer_download_folders_skipped))
+        }
     }
 
     // ---------- create & rename ----------

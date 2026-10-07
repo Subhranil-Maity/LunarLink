@@ -270,8 +270,6 @@ fun EntryActionsSheet(
                 SheetAction(
                     painterResource(R.drawable.download_icon),
                     stringResource(R.string.explorer_download),
-                    supporting = stringResource(R.string.explorer_downloads_disabled),
-                    enabled = false,
                     onClick = onDownload,
                 )
             }
@@ -298,21 +296,14 @@ fun EntryActionsSheet(
 private fun SheetAction(
     icon: Painter,
     label: String,
-    supporting: String? = null,
-    enabled: Boolean = true,
     destructive: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val color = when {
-        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-        destructive -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    val color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     ListItem(
-        modifier = Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         leadingContent = { Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp)) },
         headlineContent = { Text(label, color = color) },
-        supportingContent = supporting?.let { { Text(it) } },
     )
 }

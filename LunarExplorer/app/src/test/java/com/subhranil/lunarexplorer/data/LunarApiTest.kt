@@ -9,14 +9,18 @@ import com.subhranil.lunarexplorer.data.api.LunarError
 import com.subhranil.lunarexplorer.data.api.SortKey
 import com.subhranil.lunarexplorer.data.api.SortOrder
 import com.subhranil.lunarexplorer.data.api.createHttpClient
+import com.subhranil.lunarexplorer.data.api.hasCode
 import com.subhranil.lunarexplorer.testing.FakeLunarServer
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readString
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.ConnectException
@@ -113,5 +117,26 @@ class LunarApiTest {
         }
         val result = LunarApi(createHttpClient(engine), "http://h").info()
         assertTrue((result as ApiResult.Failure).error is LunarError.Unexpected)
+    }
+
+    @Test
+    fun downloadSupportsRangesAndReportsErrors() = runTest {
+        val server = FakeLunarServer().file("/share/a.txt", "hello world".toByteArray())
+        val api = server.api()
+        val token = (api.login("user", "pw") as ApiResult.Success).value.token
+
+        var status = 0
+        var body = ""
+        assertTrue(api.download(token, "/share/a.txt", 6) { status = it.status; body = it.body.readRemaining().readString() } is ApiResult.Success)
+        assertEquals(206, status)
+        assertEquals("world", body)
+
+        assertTrue(api.download(token, "/share/a.txt", 11) { status = it.status } is ApiResult.Success)
+        assertEquals(416, status)
+
+        var called = false
+        val missing = api.download(token, "/share/nope", 0) { called = true }
+        assertTrue((missing as ApiResult.Failure).error.hasCode(ErrorCode.NOT_FOUND))
+        assertFalse(called)
     }
 }

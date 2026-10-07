@@ -1,3 +1,187 @@
 <resources>
     <string name="app_name">Lunar Explorer</string>
+
+    <!-- Common -->
+    <string name="action_back">Back</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_save">Save</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_more">More options</string>
+    <string name="action_refresh">Refresh</string>
+
+    <!-- Errors -->
+    <string name="error_unreachable">Can\'t reach the server. Check the address and that it\'s running.</string>
+    <string name="error_timeout">The server took too long to respond.</string>
+    <string name="error_unexpected">Something went wrong: %1$s</string>
+    <string name="error_login_failed">Wrong username or password.</string>
+    <string name="error_too_many_attempts">Too many failed logins. Try again in %1$d s.</string>
+    <string name="error_permission_denied">You don\'t have permission to do this.</string>
+    <string name="error_outside_roots">That location isn\'t shared by the server.</string>
+    <string name="error_system_denied">The server\'s operating system denied access.</string>
+    <string name="error_not_found">File or folder not found.</string>
+    <string name="error_already_exists">An item with that name already exists.</string>
+    <string name="error_trash_failed">Couldn\'t move to trash. Try deleting permanently.</string>
+    <string name="error_session_expired">Your session expired. Reconnect to continue.</string>
+
+    <!-- Home -->
+    <string name="home_title">Lunar Explorer</string>
+    <string name="home_add_server">Add server</string>
+    <string name="home_empty_title">No servers yet</string>
+    <string name="home_empty_body">Run LunarLink on your computer, then add it here using its IP address or domain name.</string>
+    <string name="home_last_connected">Last connected %1$s</string>
+    <string name="home_never_connected">Never connected</string>
+    <string name="home_status_checking">Checking…</string>
+    <string name="home_status_online">Online</string>
+    <string name="home_status_offline">Offline</string>
+    <string name="home_copy_address">Copy address</string>
+    <string name="home_delete_title">Remove %1$s?</string>
+    <string name="home_delete_body">The saved address and password will be removed from this device.</string>
+    <string name="home_server_removed">Server removed</string>
+
+    <!-- Server editor -->
+    <string name="editor_add_title">Add server</string>
+    <string name="editor_edit_title">Edit server</string>
+    <string name="editor_host">Host (IP or domain)</string>
+    <string name="editor_host_hint">192.168.1.20 or files.example.com</string>
+    <string name="editor_port">Port</string>
+    <string name="editor_username">Username</string>
+    <string name="editor_password">Password</string>
+    <string name="editor_show_password">Show password</string>
+    <string name="editor_hide_password">Hide password</string>
+    <string name="editor_invalid_address">Enter a valid host and port.</string>
+    <string name="editor_resolved">Will connect to %1$s</string>
+    <string name="editor_test">Test connection</string>
+    <string name="editor_testing">Testing…</string>
+    <string name="editor_test_ok">Connected to %1$s (%2$s)</string>
+    <string name="editor_test_required">Test the connection before saving.</string>
+    <string name="editor_duplicate">This server is already saved.</string>
+
+    <!-- Explorer -->
+    <string name="explorer_connecting">Connecting to %1$s…</string>
+    <string name="explorer_connect_failed">Couldn\'t connect</string>
+    <string name="explorer_locations">Locations</string>
+    <string name="explorer_no_roots">This server isn\'t sharing any folders with your account.</string>
+    <string name="explorer_pick_location">Pick a location to start browsing.</string>
+    <string name="explorer_empty_folder">This folder is empty</string>
+    <string name="explorer_no_matches">No items match \"%1$s\"</string>
+    <string name="explorer_load_failed">Couldn\'t load this folder</string>
+    <string name="explorer_search">Search this folder</string>
+    <string name="explorer_close_search">Close search</string>
+    <string name="explorer_sort">Sort</string>
+    <string name="explorer_sort_name">Name</string>
+    <string name="explorer_sort_modified">Date modified</string>
+    <string name="explorer_sort_size">Size</string>
+    <string name="explorer_sort_kind">Type</string>
+    <string name="explorer_sort_descending">Descending</string>
+    <string name="explorer_show_hidden">Show hidden files</string>
+    <string name="explorer_new_file">New file</string>
+    <string name="explorer_new_folder">New folder</string>
+    <string name="explorer_new">New</string>
+    <string name="explorer_free_space">%1$s free of %2$s</string>
+    <string name="explorer_read_only">Read only</string>
+    <string name="explorer_select_all">Select all</string>
+    <string name="explorer_clear_selection">Clear selection</string>
+    <string name="explorer_copy">Copy</string>
+    <string name="explorer_move">Move</string>
+    <string name="explorer_rename">Rename</string>
+    <string name="explorer_details">Details</string>
+    <string name="explorer_download">Download</string>
+    <string name="explorer_downloads_disabled">Downloads are temporarily disabled</string>
+    <string name="explorer_paste_here">Paste here</string>
+    <string name="explorer_paste_not_allowed">You can\'t paste in this location</string>
+    <string name="explorer_working">Working… %1$d of %2$d</string>
+    <string name="explorer_created">Created %1$s</string>
+    <string name="explorer_renamed">Renamed to %1$s</string>
+    <string name="explorer_into_itself">Can\'t put a folder inside itself</string>
+
+    <!-- Explorer dialogs -->
+    <string name="dialog_new_file">New file</string>
+    <string name="dialog_new_folder">New folder</string>
+    <string name="dialog_rename">Rename</string>
+    <string name="dialog_name">Name</string>
+    <string name="dialog_create">Create</string>
+    <string name="name_error_empty">Enter a name</string>
+    <string name="name_error_reserved">This name is reserved</string>
+    <string name="name_error_invalid">The name contains characters that aren\'t allowed</string>
+    <string name="name_error_too_long">The name is too long</string>
+    <string name="dialog_delete_title_one">Delete \"%1$s\"?</string>
+    <string name="dialog_delete_body_trash">Items will be moved to the server\'s trash.</string>
+    <string name="dialog_delete_body_permanent">Items will be deleted permanently. This can\'t be undone.</string>
+    <string name="dialog_delete_folders_note">Folders are deleted with everything inside them.</string>
+    <string name="dialog_delete_permanently">Delete permanently</string>
+    <string name="dialog_conflict_title">\"%1$s\" already exists</string>
+    <string name="dialog_conflict_body">An item with this name already exists in the destination folder.</string>
+    <string name="dialog_conflict_replace">Replace</string>
+    <string name="dialog_conflict_keep_both">Keep both</string>
+    <string name="dialog_conflict_skip">Skip</string>
+    <string name="dialog_conflict_apply_all">Do this for all conflicts</string>
+    <string name="details_type">Type</string>
+    <string name="details_size">Size</string>
+    <string name="details_modified">Modified</string>
+    <string name="details_location">Location</string>
+    <string name="details_link_target">Link target</string>
+    <string name="kind_file">File</string>
+    <string name="kind_folder">Folder</string>
+    <string name="kind_symlink">Link</string>
+    <string name="kind_other">Other</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System default</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_summary">Use colors from your wallpaper</string>
+    <string name="settings_browsing">Browsing</string>
+    <string name="settings_show_hidden_summary">Show files and folders that start with a dot</string>
+    <string name="settings_default_sort">Default sort</string>
+    <string name="settings_data">Data</string>
+    <string name="settings_remove_servers">Remove all saved servers</string>
+    <string name="settings_remove_servers_summary">Deletes saved addresses and passwords from this device</string>
+    <string name="settings_remove_servers_confirm">Remove all saved servers?</string>
+    <string name="settings_servers_removed">All servers removed</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_downloads_note">Downloads are temporarily disabled while they are being redesigned.</string>
+
+
+    <!-- Plurals -->
+    <plurals name="explorer_items_selected">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <plurals name="explorer_clipboard_copy">
+        <item quantity="one">%1$d item to copy</item>
+        <item quantity="other">%1$d items to copy</item>
+    </plurals>
+    <plurals name="explorer_clipboard_move">
+        <item quantity="one">%1$d item to move</item>
+        <item quantity="other">%1$d items to move</item>
+    </plurals>
+    <plurals name="explorer_done_copy">
+        <item quantity="one">Copied %1$d item</item>
+        <item quantity="other">Copied %1$d items</item>
+    </plurals>
+    <plurals name="explorer_done_move">
+        <item quantity="one">Moved %1$d item</item>
+        <item quantity="other">Moved %1$d items</item>
+    </plurals>
+    <plurals name="explorer_done_delete">
+        <item quantity="one">Deleted %1$d item</item>
+        <item quantity="other">Deleted %1$d items</item>
+    </plurals>
+    <plurals name="explorer_done_partial">
+        <item quantity="one">%1$d item failed: %2$s</item>
+        <item quantity="other">%1$d items failed: %2$s</item>
+    </plurals>
+    <plurals name="dialog_delete_title_many">
+        <item quantity="one">Delete %1$d item?</item>
+        <item quantity="other">Delete %1$d items?</item>
+    </plurals>
 </resources>

@@ -101,12 +101,7 @@ fn compare(a: &Entry, b: &Entry, options: &ListOptions) -> Ordering {
             return dirs;
         }
     }
-    let by_name = || {
-        a.name
-            .to_lowercase()
-            .cmp(&b.name.to_lowercase())
-            .then_with(|| a.name.cmp(&b.name))
-    };
+    let by_name = || natural_cmp(&a.name, &b.name).then_with(|| a.name.cmp(&b.name));
     let ordering = match options.sort {
         SortKey::Name => by_name(),
         SortKey::Modified => a.modified.cmp(&b.modified).then_with(by_name),
@@ -117,6 +112,45 @@ fn compare(a: &Entry, b: &Entry, options: &ListOptions) -> Ordering {
         SortOrder::Asc => ordering,
         SortOrder::Desc => ordering.reverse(),
     }
+}
+
+/// Case-insensitive "natural" order: digit runs compare by value, so `file_2` < `file_10`.
+pub fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let mut a = a.chars().flat_map(char::to_lowercase).peekable();
+    let mut b = b.chars().flat_map(char::to_lowercase).peekable();
+    loop {
+        match (a.peek().copied(), b.peek().copied()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
+                let da = take_digits(&mut a);
+                let db = take_digits(&mut b);
+                let ta = da.trim_start_matches('0');
+                let tb = db.trim_start_matches('0');
+                let ord = ta.len().cmp(&tb.len()).then_with(|| ta.cmp(tb));
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+            }
+            (Some(x), Some(y)) => {
+                if x != y {
+                    return x.cmp(&y);
+                }
+                a.next();
+                b.next();
+            }
+        }
+    }
+}
+
+fn take_digits(chars: &mut std::iter::Peekable<impl Iterator<Item = char>>) -> String {
+    let mut digits = String::new();
+    while let Some(c) = chars.peek().copied().filter(char::is_ascii_digit) {
+        digits.push(c);
+        chars.next();
+    }
+    digits
 }
 
 fn kind_rank(e: &Entry) -> u8 {
@@ -153,6 +187,32 @@ mod tests {
         assert_eq!(names(&l), ["zdir", ".hidden", "A.txt", "b.txt"]);
         assert_eq!(l.total, 4);
         assert_eq!(l.entry.kind, EntryKind::Dir);
+    }
+
+    #[test]
+    fn natural_order() {
+        let mut names = vec![
+            "file_10.txt",
+            "File_2.txt",
+            "file_1.txt",
+            "a",
+            "file_02b",
+            "B",
+        ];
+        names.sort_by(|x, y| natural_cmp(x, y));
+        assert_eq!(
+            names,
+            [
+                "a",
+                "B",
+                "file_1.txt",
+                "File_2.txt",
+                "file_02b",
+                "file_10.txt"
+            ]
+        );
+        assert_eq!(natural_cmp("x9", "x10"), Ordering::Less);
+        assert_eq!(natural_cmp("abc", "abc"), Ordering::Equal);
     }
 
     #[test]

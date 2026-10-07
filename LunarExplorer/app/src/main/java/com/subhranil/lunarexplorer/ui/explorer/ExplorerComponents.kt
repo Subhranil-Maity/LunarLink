@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -175,12 +176,12 @@ fun EntryTile(
                 modifier = Modifier.padding(start = 10.dp, end = 2.dp, bottom = 6.dp),
             ) {
                 Column(Modifier.weight(1f)) {
+                    // One line, shortened in the middle, so the extension stays visible.
                     Text(
                         entry.name,
                         style = MaterialTheme.typography.bodyMedium,
-                        minLines = 2,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
                     )
                     Text(
                         supporting,
@@ -334,6 +335,8 @@ fun ClipboardBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                // Stay clear of the gesture/navigation bar; the surface colour still reaches the edge.
+                .navigationBarsPadding()
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -392,6 +395,7 @@ fun ProgressBar(progress: Progress, onCancel: () -> Unit) {
         Row(
             Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -1,8 +1,9 @@
 //! Announces the server on the local network (mDNS / DNS-SD), so apps can find it without typing an
 //! address. Service type `_lunarlink._tcp`; TXT keys `api`, `auth` (`1`/`0`), `os` and `ver`.
+//! Announced over IPv4 (see [`Advertisement::start`]).
 
 use crate::server::api::info::{API_VERSION, SERVER_VERSION};
-use mdns_sd::{ServiceDaemon, ServiceInfo};
+use mdns_sd::{IfKind, ServiceDaemon, ServiceInfo};
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -35,6 +36,13 @@ impl Advertisement {
         let wildcard = bind.is_some_and(|ip| ip.is_unspecified());
 
         let daemon = ServiceDaemon::new()?;
+        // Answer over IPv4 only, unless the server listens on a specific IPv6 address. mDNS answers
+        // carry only the addresses of the family the question came in on, and Android often asks over
+        // IPv6, so it would never learn the IPv4 address: the phone then shows a long (and often
+        // rotating) IPv6 address and doesn't recognise a server saved by its IPv4 address.
+        if !bind.is_some_and(|ip| ip.is_ipv6() && !ip.is_unspecified()) {
+            daemon.disable_interface(IfKind::IPv6)?;
+        }
         let api = API_VERSION.to_string();
         let properties = [
             ("api", api.as_str()),

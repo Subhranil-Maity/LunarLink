@@ -537,8 +537,11 @@ can list it without typing an address:
 
 - Service type `_lunarlink._tcp`, instance name = the `name` from [`GET /api/info`](#get-apiinfo).
 - TXT records: `api` (API version), `auth` (`1` or `0`), `os` (`os_type`) and `ver` (server version).
-- When `host` is `0.0.0.0` or `::`, every LAN address is announced. A specific address announces only
-  that one. A loopback-only server is not announced.
+- Announcements and answers go out over IPv4 (unless `host` is a specific IPv6 address). mDNS answers
+  only carry addresses of the family the question arrived on, and Android often asks over IPv6, so
+  answering over IPv6 too would make phones see only the server's IPv6 address.
+- When `host` is `0.0.0.0` or `::`, every LAN IPv4 address is announced. A specific address announces
+  only that one. A loopback-only server is not announced.
 - The announcement is withdrawn when the server shuts down.
 
 Test it on Linux with `avahi-browse -rt _lunarlink._tcp`.

@@ -9,6 +9,7 @@ import androidx.annotation.RequiresApi
 import com.subhranil.lunarexplorer.data.servers.normalizeBaseUrl
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -17,6 +18,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
@@ -43,54 +45,108 @@ fun interface ServerDiscovery {
 class NsdServerDiscovery(context: Context) : ServerDiscovery {
     private val nsd = context.getSystemService(NsdManager::class.java)
 
+    private sealed interface Event {
+        data class Found(val info: NsdServiceInfo) : Event
+        data class Resolved(val name: String, val server: DiscoveredServer?) : Event
+        data class Lost(val name: String) : Event
+    }
+
     override fun servers(): Flow<List<DiscoveredServer>> = callbackFlow {
         val found = linkedMapOf<String, DiscoveredServer>()
         fun publish() = trySend(found.values.sortedBy { it.name.lowercase() })
         publish()
 
-        // Resolve one service at a time: before Android 14 only one resolve may be active.
-        val toResolve = Channel<NsdServiceInfo>(Channel.UNLIMITED)
-        val lost = Channel<String>(Channel.UNLIMITED)
+        // Every change goes through one channel, so `found` is only touched by one coroutine.
+        val events = Channel<Event>(Channel.UNLIMITED)
+        val modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+        // Android 14+: one live watcher per service, so address changes (e.g. IPv4 arriving after IPv6) show up.
+        val watchers = ConcurrentHashMap<String, NsdManager.ServiceInfoCallback>()
+        // Older versions: resolve one service at a time, as only one resolve may be active.
+        val legacyQueue = Channel<NsdServiceInfo>(Channel.UNLIMITED)
+
         launch {
-            for (info in toResolve) {
-                val server = withTimeoutOrNull(RESOLVE_TIMEOUT_MS) { resolve(info) }?.toServer() ?: continue
-                found[info.serviceName] = server
-                publish()
+            for (event in events) {
+                when (event) {
+                    is Event.Found -> {
+                        val name = event.info.serviceName
+                        if (!modern) {
+                            legacyQueue.trySend(event.info)
+                        } else if (!watchers.containsKey(name)) {
+                            watchers[name] = watch(event.info, events)
+                        }
+                    }
+                    is Event.Resolved -> event.server?.let {
+                        if (found[event.name] != it) {
+                            found[event.name] = it
+                            publish()
+                        }
+                    }
+                    is Event.Lost -> {
+                        watchers.remove(event.name)?.let(::unwatch)
+                        if (found.remove(event.name) != null) publish()
+                    }
+                }
             }
         }
+        if (!modern) {
+            launch {
+                for (info in legacyQueue) {
+                    val server = withTimeoutOrNull(RESOLVE_TIMEOUT_MS) { resolveLegacy(info) }?.toServer()
+                    events.trySend(Event.Resolved(info.serviceName, server))
+                }
+            }
+        }
+
+        // Search again every few seconds while collected. Each search sends a fresh query, which is
+        // answered with the server's IPv4 address; servers that start while the screen is open are
+        // only noticed this way, because their start-up announcement isn't always picked up.
+        var round = SearchRound(events)
+        nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, round)
         launch {
-            for (name in lost) {
-                if (found.remove(name) != null) publish()
+            while (true) {
+                delay(SEARCH_INTERVAL_MS)
+                round.retire()
+                runCatching { nsd.stopServiceDiscovery(round) }
+                round = SearchRound(events)
+                nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, round)
             }
         }
-
-        val listener = object : NsdManager.DiscoveryListener {
-            override fun onServiceFound(info: NsdServiceInfo) {
-                toResolve.trySend(info)
-            }
-
-            override fun onServiceLost(info: NsdServiceInfo) {
-                lost.trySend(info.serviceName)
-            }
-
-            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Log.w(TAG, "discovery failed to start: $errorCode")
-            }
-
-            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
-            override fun onDiscoveryStarted(serviceType: String) = Unit
-            override fun onDiscoveryStopped(serviceType: String) = Unit
-        }
-        nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener)
         awaitClose {
-            runCatching { nsd.stopServiceDiscovery(listener) }
-            toResolve.close()
-            lost.close()
+            round.retire()
+            runCatching { nsd.stopServiceDiscovery(round) }
+            watchers.values.forEach(::unwatch)
+            watchers.clear()
+            events.close()
+            legacyQueue.close()
         }
     }
 
-    private suspend fun resolve(info: NsdServiceInfo): NsdServiceInfo? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) resolveModern(info) else resolveLegacy(info)
+    /** One `discoverServices` run. Once retired, its late callbacks are ignored. */
+    private class SearchRound(private val events: Channel<Event>) : NsdManager.DiscoveryListener {
+        @Volatile
+        private var retired = false
+
+        fun retire() {
+            retired = true
+        }
+
+        override fun onServiceFound(info: NsdServiceInfo) {
+            if (!retired) events.trySend(Event.Found(info))
+        }
+
+        override fun onServiceLost(info: NsdServiceInfo) {
+            // Stopping a round can report its services as lost; they haven't gone anywhere.
+            if (!retired) events.trySend(Event.Lost(info.serviceName))
+        }
+
+        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+            Log.w(TAG, "discovery failed to start: $errorCode")
+        }
+
+        override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
+        override fun onDiscoveryStarted(serviceType: String) = Unit
+        override fun onDiscoveryStopped(serviceType: String) = Unit
+    }
 
     @Suppress("DEPRECATION")
     private suspend fun resolveLegacy(info: NsdServiceInfo): NsdServiceInfo? = suspendCancellableCoroutine { cont ->
@@ -105,29 +161,32 @@ class NsdServerDiscovery(context: Context) : ServerDiscovery {
         })
     }
 
+    /** Follows one service until it's lost or discovery stops; every update re-reads its address. */
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    private suspend fun resolveModern(info: NsdServiceInfo): NsdServiceInfo? {
-        var callback: NsdManager.ServiceInfoCallback? = null
-        try {
-            return suspendCancellableCoroutine { cont ->
-                val registered = object : NsdManager.ServiceInfoCallback {
-                    override fun onServiceUpdated(updated: NsdServiceInfo) {
-                        if (updated.hostAddresses.isNotEmpty() && cont.isActive) cont.resume(updated)
-                    }
-
-                    override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
-                        if (cont.isActive) cont.resume(null)
-                    }
-
-                    override fun onServiceLost() = Unit
-                    override fun onServiceInfoCallbackUnregistered() = Unit
-                }
-                callback = registered
-                nsd.registerServiceInfoCallback(info, EXECUTOR, registered)
+    private fun watch(info: NsdServiceInfo, events: Channel<Event>): NsdManager.ServiceInfoCallback {
+        val name = info.serviceName
+        val callback = object : NsdManager.ServiceInfoCallback {
+            override fun onServiceUpdated(updated: NsdServiceInfo) {
+                events.trySend(Event.Resolved(name, updated.toServer()))
             }
-        } finally {
-            // One answer is enough; stop listening for updates (also on timeout or cancellation).
-            callback?.let { runCatching { nsd.unregisterServiceInfoCallback(it) } }
+
+            override fun onServiceLost() {
+                events.trySend(Event.Lost(name))
+            }
+
+            override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+                Log.w(TAG, "can't follow $name: $errorCode")
+            }
+
+            override fun onServiceInfoCallbackUnregistered() = Unit
+        }
+        nsd.registerServiceInfoCallback(info, EXECUTOR, callback)
+        return callback
+    }
+
+    private fun unwatch(callback: NsdManager.ServiceInfoCallback) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            runCatching { nsd.unregisterServiceInfoCallback(callback) }
         }
     }
 
@@ -151,6 +210,7 @@ class NsdServerDiscovery(context: Context) : ServerDiscovery {
         const val SERVICE_TYPE = "_lunarlink._tcp"
         private const val TAG = "LanDiscovery"
         private const val RESOLVE_TIMEOUT_MS = 5_000L
+        private const val SEARCH_INTERVAL_MS = 15_000L
         private val EXECUTOR = Executors.newSingleThreadExecutor()
 
         /** The address as a URL host: IPv6 goes in brackets, without a scope id. */
